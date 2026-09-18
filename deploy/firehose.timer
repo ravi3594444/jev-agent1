@@ -1,0 +1,13 @@
+# /etc/systemd/system/firehose.timer
+#   sudo systemctl enable --now firehose.timer
+#   systemctl list-timers firehose.timer
+[Unit]
+Description=Run the firehose scorer on weekday mornings
+
+[Timer]
+OnCalendar=Mon..Fri 08:00
+Persistent=true        # catch up if the machine was asleep
+RandomizedDelaySec=300 # don't hammer the tender boards on the hour
+
+[Install]
+WantedBy=timers.target

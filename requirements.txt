@@ -1,0 +1,8 @@
+# The agent half. The ingest + scoring half is stdlib only.
+langchain>=1.4,<2
+langgraph>=1.2,<2
+langgraph-checkpoint-sqlite>=2
+langchain-openai>=1.6,<2
+langchain-typesafe>=0.0.1a2
+fastapi>=0.115
+uvicorn[standard]>=0.30

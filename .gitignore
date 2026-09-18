@@ -1,0 +1,30 @@
+# secrets — never commit these
+.env
+web/.env.local
+*.pem
+*.key
+
+# runtime state and output
+state/
+out/
+out-demo/
+*.sqlite
+*.sqlite-*
+*.log
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# node / next
+node_modules/
+.next/
+*.tsbuildinfo
+npm-debug.log*
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/

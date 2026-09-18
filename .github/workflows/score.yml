@@ -1,0 +1,52 @@
+name: score feeds
+
+# Runs the scorer on a schedule and keeps the digest as a downloadable artifact.
+# Secrets needed: AIMLAPI_API_KEY (Jev). Optional: SAM_API_KEY for US tenders.
+# ATRIA_API_KEY is NOT needed here — this job only scores, it does not chat.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1-5"   # 07:00 UTC, weekdays
+  workflow_dispatch:         # and a manual "Run workflow" button
+
+concurrency:
+  group: firehose-score
+  cancel-in-progress: false
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # carry `seen.json` between runs so we never re-score the same item
+      - name: Restore dedupe state
+        uses: actions/cache@v4
+        with:
+          path: state
+          key: firehose-state-${{ github.run_id }}
+          restore-keys: firehose-state-
+
+      - name: Score
+        env:
+          AIMLAPI_API_KEY: ${{ secrets.AIMLAPI_API_KEY }}
+          SAM_API_KEY: ${{ secrets.SAM_API_KEY }}
+        run: python -m firehose run
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest
+          path: |
+            out/digest.html
+            out/results.jsonl
+          if-no-files-found: warn
+          retention-days: 30

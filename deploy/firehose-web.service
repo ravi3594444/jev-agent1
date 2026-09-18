@@ -1,0 +1,17 @@
+# /etc/systemd/system/firehose-web.service — the chat bridge (always on)
+[Unit]
+Description=Firehose bridge (FastAPI)
+After=network-online.target
+
+[Service]
+WorkingDirectory=/opt/firehose
+EnvironmentFile=/opt/firehose/.env
+ExecStart=/usr/bin/python3 -m uvicorn firehose.server:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+User=firehose
+Group=firehose
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

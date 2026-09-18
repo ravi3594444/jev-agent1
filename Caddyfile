@@ -1,0 +1,21 @@
+# Public entry point. Caddy gets a real Let's Encrypt certificate for your
+# DuckDNS name automatically — no certbot, no cron renewal.
+#
+# Replace YOURNAME with your DuckDNS subdomain and set a real password hash
+# (see below). Then point DuckDNS at the VM's static external IP and open
+# ports 80 and 443 in the GCP firewall.
+
+YOURNAME.duckdns.org {
+	encode gzip
+
+	reverse_proxy 127.0.0.1:3000
+
+	# OPTIONAL password gate. Off by default.
+	# A DuckDNS subdomain is public DNS and does get scanned, and every chat
+	# message spends your Jev/Atria credits — so if you ever share the link,
+	# or just want it locked, uncomment this and run `caddy hash-password`:
+	#
+	# basic_auth {
+	# 	dev $2a$14$PASTE_THE_HASH_CADDY_PRINTS
+	# }
+}
