@@ -114,7 +114,9 @@ checkpoint_path = "state/agent.sqlite"   # conversations survive restarts
 name          = "Client work"
 question_set  = "clients"
 include = """
-Someone looking to PAY for work we can deliver:
+Either of two things.
+
+FIRST - someone looking to PAY for work we can deliver:
   - web development - sites, web apps, frontend, backend, APIs, e-commerce,
     CMS, WordPress, Shopify, Webflow;
   - AI work - LLM integration, AI agents, chatbots, RAG and search over their
@@ -126,6 +128,15 @@ Someone looking to PAY for work we can deliver:
     automated but cannot name the tool it needs.
 Contract, freelance, project, retainer and fractional work all count, remote or
 onsite, any country.
+
+SECOND - and just as valuable - a business owner describing a problem we could
+solve, even though they are not asking for a developer and may not realise one
+could help. Restaurants, clinics, dental and medical practices, agencies, law
+firms, salons, gyms, tradespeople, e-commerce stores, small manufacturers. The
+shape to look for: hours lost to manual work, retyping between systems, chasing
+bookings or invoices by hand, a spreadsheet holding the business together, a
+website that is broken, slow or embarrassing, customer enquiries going
+unanswered. The pain is the lead.
 """
 exclude = """
 Freelancers advertising their own availability. Full-time salaried employee
@@ -137,39 +148,44 @@ sources = [
   # Reddit boards where clients actually post. Keyless RSS; they rate-limit
   # anonymous traffic, so daily is fine and hourly is not.
   { type = "reddit", subreddit = "forhire",  name = "r/forhire" },
-  { type = "reddit", subreddit = "jobbit",   name = "r/jobbit" },
   { type = "reddit", subreddit = "slavelabour", name = "r/slavelabour" },
+
+  # Where business owners talk, rather than where developers look for work.
+  # Most of what lands here is not a job post - it is someone describing a
+  # problem. That is the point.
+  { type = "reddit", subreddit = "Entrepreneur", query = "manual OR spreadsheet OR automate OR website OR bookings OR admin", name = "r/Entrepreneur" },
 
   # Automation-platform communities. People post "can someone build me this"
   # constantly, and it rarely reaches the freelance boards.
   { type = "reddit", subreddit = "n8n",        name = "r/n8n" },
-  { type = "reddit", subreddit = "Zapier",     name = "r/Zapier" },
-  { type = "reddit", subreddit = "nocode",     name = "r/nocode" },
   { type = "reddit", subreddit = "automation", name = "r/automation" },
 
   # Where small businesses describe a painful manual process without knowing
   # it is a software job. High noise, high value when it lands - which is
   # exactly the case for having a cheap filter read all of it.
-  { type = "reddit", subreddit = "smallbusiness",           query = "automate OR automation OR software OR developer", name = "r/smallbusiness (automation)" },
-  { type = "reddit", subreddit = "EntrepreneurRideAlong",   query = "automate OR developer OR build", name = "r/EntrepreneurRideAlong" },
+  { type = "reddit", subreddit = "smallbusiness", query = "automate OR automation OR developer", name = "r/smallbusiness" },
 
-  # Site-wide searches for the phrases people actually type when they need
-  # this work done.
-  { type = "reddit", query = "\"need a developer\" OR \"looking for a developer\" OR \"hire a developer\"", name = "reddit: needs a developer" },
-  { type = "reddit", query = "\"n8n\" OR \"make.com\" OR \"zapier\" developer needed OR hire OR build", name = "reddit: automation build" },
-  { type = "reddit", query = "\"AI agent\" OR chatbot developer needed OR hire OR build for my business", name = "reddit: AI build" },
+  # Two wide site-wide searches instead of five narrow ones. Reddit throttles
+  # anonymous traffic per request, not per result, so fewer and broader wins.
+  { type = "reddit", query = "\"need a developer\" OR \"looking for a developer\" OR \"hire a developer\" OR \"need someone to build\"", name = "reddit: needs a developer" },
+  { type = "reddit", query = "n8n OR zapier OR \"make.com\" OR \"AI agent\" OR chatbot (hire OR build OR needed OR freelancer)", name = "reddit: automation + AI builds" },
+
+  # The pain language itself. Owners rarely write "I need a developer" - they
+  # write "I spend three hours a day copying this into a spreadsheet".
+  { type = "reddit", query = "(\"spend hours\" OR \"by hand\" OR manually OR \"copy and paste\" OR \"so much time\") (spreadsheet OR bookings OR invoices OR orders OR appointments OR customers)", name = "reddit: manual-work pain" },
 
   # HN's monthly "Freelancer? Seeking freelancer?" thread lives in COMMENTS,
   # which is why this one searches comments rather than stories.
-  { type = "hn", tags = "comment", query = "seeking freelancer web developer", name = "HN freelancer thread" },
+  # The thread you want is "Freelancer? Seeking freelancer?" - NOT "Who wants
+  # to be hired?", which is people advertising themselves.
+  { type = "hn", tags = "comment", max_age_days = 45, query = "seeking freelancer", name = "HN seeking-freelancer thread" },
 
-  # Free JSON feed. Their terms ask for credit and a link to the original
-  # posting, which the item URL provides.
-  { type = "remoteok", tags = ["dev", "javascript", "python", "ai"], name = "RemoteOK" },
-  { type = "hn", tags = "comment", query = "automation n8n zapier make.com integration build", name = "HN automation asks" },
-
-  { type = "rss", url = "https://weworkremotely.com/categories/remote-programming-jobs.rss", name = "We Work Remotely" },
+  { type = "hn", tags = "comment", max_age_days = 45, query = "n8n OR zapier OR make.com OR automation build integration", name = "HN automation asks" },
 ]
+
+# Nothing older than this is worth reading - a month-old "need a developer"
+# post has already been answered. Per-source overrides are allowed.
+max_age_days = 21
 
 # The single most valuable rule in this file. Boards like r/forhire are roughly
 # half people advertising themselves; no relevance score can tell "I need a

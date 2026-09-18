@@ -105,9 +105,13 @@ def tech(cfg: dict) -> dict:
 
 
 DEFAULT_POSTING_KINDS = {
-    "hiring": "Someone needs work done and is looking to pay for it - a client, employer or agency",
-    "offering": "Someone is advertising their OWN services or availability - a freelancer touting for work",
-    "discussion": "A question, opinion, or general chat about freelancing rather than a real posting",
+    "hiring": "Explicitly looking to pay someone - a job post, RFP, or 'I need a developer'",
+    "unstated_need": "A business owner describing a manual, repetitive or painful process they "
+                     "are stuck with - hours of copying data, chasing bookings, retyping orders, "
+                     "a website that is broken or embarrassing. They are NOT asking for a "
+                     "developer and may not know one could help, but the work is clearly there",
+    "offering": "Someone advertising their OWN services or availability - a freelancer touting for work",
+    "discussion": "General chat, opinion, or a question with no underlying work behind it",
 }
 
 DEFAULT_WORK_KINDS = {
@@ -156,6 +160,14 @@ def clients(cfg: dict) -> dict:
             "How much money this posting implies, judging from any stated rate, "
             "budget, scope or seniority.",
             cfg.get("budget_levels", DEFAULT_BUDGET_LEVELS),
+        ),
+        "is_business_owner": noul(
+            "The person posting runs or works in a real operating business - a shop, "
+            "restaurant, clinic, agency, studio, practice, e-commerce store or similar.",
+            true_desc="Speaks as an owner or operator about their own customers, staff, "
+                      "bookings, orders, invoices or premises",
+            false_desc="A developer, jobseeker, student, hobbyist, or a large tech company's "
+                       "recruiting post",
         ),
         "contactable": noul(
             "There is a clear way to respond - a contact detail, an application "

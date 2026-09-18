@@ -11,14 +11,18 @@ import time
 import html
 import json
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
-UA = "jev-firehose/1.0 (+feed relevance filter)"
+# Reddit wants a descriptive, non-generic User-Agent and throttles anything that
+# looks bot-shaped. This format is what they ask for.
+UA = "linux:jev-firehose:1.0 (by /u/ravi3594444)"
 TAG_RE = re.compile(r"<[^>]+>")
 
 
@@ -63,13 +67,31 @@ def clean_text(raw: str) -> str:
     return re.sub(r"\s+", " ", txt).strip()
 
 
-def _get(url: str, timeout: float = 25.0) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Encoding": "gzip"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        data = r.read()
-    if data[:2] == b"\x1f\x8b":
-        data = gzip.decompress(data)
-    return data
+def _get(url: str, timeout: float = 25.0, tries: int = 3) -> bytes:
+    """GET with backoff on 429/5xx. Reddit hands out 429s freely to anonymous
+    traffic, and one retry after a pause usually clears it."""
+    delay = 5.0
+    for attempt in range(tries):
+        req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Encoding": "gzip"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                data = r.read()
+            if data[:2] == b"\x1f\x8b":
+                data = gzip.decompress(data)
+            return data
+        except urllib.error.HTTPError as exc:
+            if exc.code in (429, 500, 502, 503) and attempt < tries - 1:
+                time.sleep(float(exc.headers.get("Retry-After") or delay))
+                delay *= 2
+                continue
+            raise
+        except urllib.error.URLError:
+            if attempt < tries - 1:
+                time.sleep(delay)
+                delay *= 2
+                continue
+            raise
+    raise RuntimeError("unreachable")
 
 
 # --------------------------------------------------------------------------
@@ -120,22 +142,32 @@ def fetch_rss(url: str, limit: int = 40, source: str = "", timeout: float = 25.0
 # Hacker News (Algolia)
 # --------------------------------------------------------------------------
 def fetch_hn(query: str = "", limit: int = 40, min_points: int = 0, timeout: float = 25.0,
-             tags: str = "story") -> list[Item]:
+             tags: str = "story", max_age_days: int = 0) -> list[Item]:
     """`tags="comment"` searches comments - that is where HN's monthly
     "Freelancer? Seeking freelancer?" threads actually live."""
     params = {"tags": tags, "hitsPerPage": str(min(limit, 100))}
     if query:
         params["query"] = query
+    numeric = []
     if min_points:
-        params["numericFilters"] = f"points>{min_points}"
+        numeric.append(f"points>{min_points}")
+    if max_age_days:
+        cutoff = int((datetime.now(timezone.utc) - timedelta(days=max_age_days)).timestamp())
+        numeric.append(f"created_at_i>{cutoff}")
+    if numeric:
+        params["numericFilters"] = ",".join(numeric)
     url = "https://hn.algolia.com/api/v1/search_by_date?" + urllib.parse.urlencode(params)
     data = json.loads(_get(url, timeout))
     out: list[Item] = []
     for hit in data.get("hits", []):
-        body = clean_text(hit.get("comment_text") or hit.get("story_text") or "")
-        title = hit.get("title") or hit.get("story_title") or ""
-        if not title and body:
-            title = body[:110]          # comments have no title of their own
+        comment = clean_text(hit.get("comment_text") or "")
+        body = comment or clean_text(hit.get("story_text") or "")
+        if comment:
+            # a comment's own text IS its title - using the parent story title
+            # made every reply in a thread look identical
+            title = comment[:140]
+        else:
+            title = hit.get("title") or hit.get("story_title") or body[:110]
         if not title:
             continue
         out.append(
@@ -179,7 +211,8 @@ def fetch(spec: dict, limit: int) -> list[Item]:
     if kind == "hn":
         return fetch_hn(spec.get("query", ""), limit=limit,
                         min_points=int(spec.get("min_points", 0)),
-                        tags=spec.get("tags", "story"))
+                        tags=spec.get("tags", "story"),
+                        max_age_days=int(spec.get("max_age_days", 0)))
     if kind == "fixture":
         return fetch_fixture(spec["path"], limit=limit, source=spec.get("name", ""))
     if kind == "reddit":
@@ -219,7 +252,8 @@ def fetch(spec: dict, limit: int) -> list[Item]:
     raise ValueError(f"unknown source type {kind!r}")
 
 
-def fetch_stream(stream_id: str, specs: list[dict], limit_per_source: int) -> tuple[list[Item], list[str]]:
+def fetch_stream(stream_id: str, specs: list[dict], limit_per_source: int,
+                 max_age_days: int = 0) -> tuple[list[Item], list[str]]:
     """Fetch every source in a stream. Returns (items, warnings)."""
     seen: set[str] = set()
     items: list[Item] = []
@@ -231,6 +265,10 @@ def fetch_stream(stream_id: str, specs: list[dict], limit_per_source: int) -> tu
         except Exception as exc:
             warnings.append(f"{stream_id}: could not fetch {label} ({exc.__class__.__name__}: {exc})")
             continue
+        age_limit = int(spec.get("max_age_days", max_age_days) or 0)
+        got, stale = drop_stale(got, age_limit)
+        if stale:
+            warnings.append(f"{stream_id}: skipped {stale} stale item(s) from {label}")
         for it in got:
             it.stream = stream_id
             if it.id in seen:
@@ -238,6 +276,44 @@ def fetch_stream(stream_id: str, specs: list[dict], limit_per_source: int) -> tu
             seen.add(it.id)
             items.append(it)
     return items, warnings
+
+
+def parse_when(value: str) -> datetime | None:
+    """Best-effort date parsing across RSS, Atom, ISO and epoch formats."""
+    if not value:
+        return None
+    text = str(value).strip()
+    if text.isdigit():
+        try:
+            return datetime.fromtimestamp(int(text), tz=timezone.utc)
+        except (ValueError, OSError):
+            return None
+    try:
+        dt = parsedate_to_datetime(text)          # RFC 822: RSS pubDate
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        pass
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def drop_stale(items: list[Item], max_age_days: int) -> tuple[list[Item], int]:
+    """Remove anything older than the cutoff. Items with no parsable date are
+    KEPT - an unknown date is not evidence of staleness, and some feeds omit it."""
+    if not max_age_days:
+        return items, 0
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    fresh, dropped = [], 0
+    for it in items:
+        when = parse_when(it.published)
+        if when is not None and when < cutoff:
+            dropped += 1
+            continue
+        fresh.append(it)
+    return fresh, dropped
 
 
 def now_iso() -> str:
@@ -248,7 +324,7 @@ def now_iso() -> str:
 # Freelance / client-work sources
 # --------------------------------------------------------------------------
 _REDDIT_LAST = 0.0
-REDDIT_MIN_GAP = 2.5   # seconds between Reddit requests
+REDDIT_MIN_GAP = 8.0   # seconds between Reddit requests; 2.5 earned a 429 on 11 of 12
 
 
 def fetch_reddit(subreddit: str = "", query: str = "", limit: int = 40,

@@ -111,6 +111,12 @@ def _bar(label: str, value: float, color_var: str) -> str:
     )
 
 
+def _lead_kind(r: Result) -> str:
+    """Leads that must be approached differently should not sit in one list."""
+    a = r.answers.get("posting_kind")
+    return getattr(a, "choice", "") if a is not None else ""
+
+
 def _item_card(r: Result) -> str:
     link = f'<a href="{_esc(r.item.url)}" target="_blank" rel="noopener">{_esc(r.item.title)}</a>' \
         if r.item.url else f"<strong>{_esc(r.item.title)}</strong>"
@@ -178,8 +184,19 @@ def render(
         if not s_keep and not s_rev:
             continue
         body += f"<h2>{_esc(label)}</h2>"
-        body += "".join(_item_card(r) for r in s_keep) or \
-            '<div class="warn">Nothing cleared the keep gate in this stream.</div>'
+        asking = [r for r in s_keep if _lead_kind(r) != "unstated_need"]
+        latent = [r for r in s_keep if _lead_kind(r) == "unstated_need"]
+        if asking or not latent:
+            body += "".join(_item_card(r) for r in asking) or \
+                '<div class="warn">Nothing cleared the keep gate in this stream.</div>'
+        if latent:
+            body += ('<h2 style="margin-top:26px">' + _esc(label)
+                     + " &mdash; no one asked, but the work is there</h2>"
+                     '<div class="warn">These are people describing a problem, not posting a '
+                     "job. Reaching out cold needs care: lead with the specific thing you "
+                     "noticed and what you would do about it, and respect each community's "
+                     "rules on solicitation &mdash; a generic pitch will get you blocked.</div>")
+            body += "".join(_item_card(r) for r in latent)
         if s_rev:
             body += (f"<details><summary>{len(s_rev)} borderline item"
                      f"{'s' if len(s_rev) != 1 else ''} the model was not confident about</summary>"

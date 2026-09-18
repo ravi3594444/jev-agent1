@@ -167,7 +167,10 @@ def run_stream(
     stats: RunStats | None = None,
     timeout: float = 60.0,
 ) -> tuple[list[Result], list[str]]:
-    items, warnings = fetch_stream(stream_id, stream_cfg.get("sources", []), limit_per_source)
+    items, warnings = fetch_stream(
+        stream_id, stream_cfg.get("sources", []), limit_per_source,
+        max_age_days=int(stream_cfg.get("max_age_days", 0) or 0),
+    )
 
     if seen is not None:
         fresh = [i for i in items if seen.is_new(i.id)]

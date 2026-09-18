@@ -117,8 +117,20 @@ score can separate "I need a developer" from "I am a developer" - they read
 almost identically. A typed Choice can, so `posting_kind = "offering"` is dropped
 outright however well it scores.
 
-Reddit rate-limits anonymous RSS. Daily is comfortably inside what they tolerate;
-hourly is not.
+Reddit rate-limits anonymous RSS harder than the docs suggest: twelve requests
+spaced 2.5s apart earned a 429 on eleven of them. Requests are now spaced 8s,
+carry a descriptive User-Agent, and retry once on a 429, and the source list is
+deliberately short and wide rather than long and narrow - the limit is per
+request, not per result. Daily is fine; hourly is not.
+
+Everything is age-filtered (`max_age_days`, 21 days for this stream). A
+month-old "need a developer" post has already been answered. Items whose date
+cannot be parsed are kept - an unknown date is not evidence of staleness.
+
+RemoteOK and We Work Remotely were tried and removed: they list full-time
+salaried roles, which the exclude text correctly rejects, so they were 60% of
+the items scored and none of the keeps. The fetchers remain in `sources.py` if
+you ever want a full-time stream.
 
 ### Apify, and whether it is worth it
 
