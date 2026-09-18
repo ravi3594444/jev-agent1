@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import time
 import html
 import json
 import re
@@ -118,8 +119,11 @@ def fetch_rss(url: str, limit: int = 40, source: str = "", timeout: float = 25.0
 # --------------------------------------------------------------------------
 # Hacker News (Algolia)
 # --------------------------------------------------------------------------
-def fetch_hn(query: str = "", limit: int = 40, min_points: int = 0, timeout: float = 25.0) -> list[Item]:
-    params = {"tags": "story", "hitsPerPage": str(min(limit, 100))}
+def fetch_hn(query: str = "", limit: int = 40, min_points: int = 0, timeout: float = 25.0,
+             tags: str = "story") -> list[Item]:
+    """`tags="comment"` searches comments - that is where HN's monthly
+    "Freelancer? Seeking freelancer?" threads actually live."""
+    params = {"tags": tags, "hitsPerPage": str(min(limit, 100))}
     if query:
         params["query"] = query
     if min_points:
@@ -128,14 +132,17 @@ def fetch_hn(query: str = "", limit: int = 40, min_points: int = 0, timeout: flo
     data = json.loads(_get(url, timeout))
     out: list[Item] = []
     for hit in data.get("hits", []):
+        body = clean_text(hit.get("comment_text") or hit.get("story_text") or "")
         title = hit.get("title") or hit.get("story_title") or ""
+        if not title and body:
+            title = body[:110]          # comments have no title of their own
         if not title:
             continue
         out.append(
             Item(
                 title=title,
                 url=hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID')}",
-                summary=clean_text(hit.get("story_text") or "")[:800],
+                summary=body[:1000],
                 source="Hacker News",
                 published=hit.get("created_at", ""),
                 extra={"points": hit.get("points"), "comments": hit.get("num_comments")},
@@ -170,9 +177,25 @@ def fetch(spec: dict, limit: int) -> list[Item]:
     if kind == "rss":
         return fetch_rss(spec["url"], limit=limit, source=spec.get("name", ""))
     if kind == "hn":
-        return fetch_hn(spec.get("query", ""), limit=limit, min_points=int(spec.get("min_points", 0)))
+        return fetch_hn(spec.get("query", ""), limit=limit,
+                        min_points=int(spec.get("min_points", 0)),
+                        tags=spec.get("tags", "story"))
     if kind == "fixture":
         return fetch_fixture(spec["path"], limit=limit, source=spec.get("name", ""))
+    if kind == "reddit":
+        return fetch_reddit(spec.get("subreddit", ""), spec.get("query", ""), limit=limit)
+    if kind == "remoteok":
+        return fetch_remoteok(spec.get("tags"), limit=limit)
+    if kind == "apify":
+        import os
+        return fetch_apify(
+            spec["actor"],
+            os.environ.get(spec.get("token_env", "APIFY_TOKEN"), ""),
+            actor_input=spec.get("input"),
+            limit=limit,
+            fields=spec.get("fields"),
+            source=spec.get("name", ""),
+        )
 
     # tender boards live in their own module (imported lazily so the RSS/HN path
     # stays dependency-free and fast)
@@ -219,3 +242,139 @@ def fetch_stream(stream_id: str, specs: list[dict], limit_per_source: int) -> tu
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# --------------------------------------------------------------------------
+# Freelance / client-work sources
+# --------------------------------------------------------------------------
+_REDDIT_LAST = 0.0
+REDDIT_MIN_GAP = 2.5   # seconds between Reddit requests
+
+
+def fetch_reddit(subreddit: str = "", query: str = "", limit: int = 40,
+                 timeout: float = 25.0) -> list[Item]:
+    """Reddit's .rss endpoints still work unauthenticated.
+
+    They rate-limit anonymous traffic, so a real User-Agent (we send one), a
+    slow schedule, and spacing requests all matter. With a dozen Reddit sources
+    in one stream, firing them back to back is the quickest way to get a 429,
+    so requests are spaced by REDDIT_MIN_GAP.
+    """
+    global _REDDIT_LAST
+    wait = REDDIT_MIN_GAP - (time.monotonic() - _REDDIT_LAST)
+    if wait > 0:
+        time.sleep(wait)
+    _REDDIT_LAST = time.monotonic()
+
+    if subreddit and query:
+        url = (f"https://www.reddit.com/r/{subreddit}/search.rss?"
+               + urllib.parse.urlencode({"q": query, "restrict_sr": "1", "sort": "new"}))
+        label = f"r/{subreddit} ({query})"
+    elif subreddit:
+        url = f"https://www.reddit.com/r/{subreddit}/new.rss"
+        label = f"r/{subreddit}"
+    else:
+        url = "https://www.reddit.com/search.rss?" + urllib.parse.urlencode(
+            {"q": query, "sort": "new"})
+        label = f"reddit: {query}"
+    return fetch_rss(url, limit=limit, source=label, timeout=timeout)
+
+
+def fetch_remoteok(tags: list[str] | None = None, limit: int = 40,
+                   timeout: float = 25.0) -> list[Item]:
+    """RemoteOK's free JSON feed. First array element is a legal notice, not a job.
+
+    Their terms ask that aggregators credit RemoteOK and link to the original
+    post, which is what `url` below does.
+    """
+    url = "https://remoteok.com/api"
+    if tags:
+        url += "?" + urllib.parse.urlencode({"tags": ",".join(tags)})
+    rows = json.loads(_get(url, timeout))
+    out: list[Item] = []
+    for row in rows:
+        if not isinstance(row, dict) or "legal" in row or not row.get("position"):
+            continue
+        company = row.get("company") or ""
+        bits = [clean_text(row.get("description") or "")[:900]]
+        if company:
+            bits.insert(0, f"Company: {company}")
+        if row.get("tags"):
+            bits.append("Tags: " + ", ".join(str(t) for t in row["tags"][:10]))
+        if row.get("salary_min"):
+            bits.append(f"Salary: {row.get('salary_min')}-{row.get('salary_max')}")
+        out.append(Item(
+            title=clean_text(f"{row['position']}" + (f" at {company}" if company else "")),
+            url=row.get("url") or row.get("apply_url") or "",
+            summary=" · ".join(b for b in bits if b)[:1200],
+            source="RemoteOK",
+            published=str(row.get("date") or ""),
+            extra={"company": company, "tags": row.get("tags")},
+        ))
+        if len(out) >= limit:
+            break
+    return out
+
+
+def fetch_apify(
+    actor: str,
+    token: str,
+    actor_input: dict | None = None,
+    limit: int = 40,
+    fields: dict[str, list[str]] | None = None,
+    source: str = "",
+    timeout: float = 180.0,
+) -> list[Item]:
+    """Run any Apify actor and turn its dataset rows into Items.
+
+    Deliberately generic: every actor emits a different shape, so `fields` maps
+    our three slots onto candidate keys and we take the first that exists.
+
+    Note the timeout - actors are minutes, not milliseconds, unlike every other
+    source here. And they cost money per run, so schedule accordingly.
+    """
+    if not token:
+        raise RuntimeError("Apify needs a token - set APIFY_TOKEN")
+    url = (f"https://api.apify.com/v2/acts/{urllib.parse.quote(actor, safe='')}"
+           f"/run-sync-get-dataset-items?" + urllib.parse.urlencode({"token": token, "limit": limit}))
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(actor_input or {}).encode(),
+        method="POST",
+        headers={"User-Agent": UA, "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        rows = json.loads(r.read())
+
+    picks = fields or {}
+    title_keys = picks.get("title", ["title", "text", "caption", "name", "fullText", "content"])
+    url_keys = picks.get("url", ["url", "link", "postUrl", "permalink", "twitterUrl"])
+    text_keys = picks.get("text", ["text", "fullText", "caption", "description", "content", "body"])
+
+    def first(row: dict, keys: list[str]) -> str:
+        for k in keys:
+            v = row.get(k)
+            if isinstance(v, str) and v.strip():
+                return v
+        return ""
+
+    out: list[Item] = []
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict):
+            continue
+        body = clean_text(first(row, text_keys))
+        title = clean_text(first(row, title_keys)) or body[:110]
+        if not title:
+            continue
+        author = row.get("authorName") or row.get("username") or row.get("ownerUsername") or ""
+        out.append(Item(
+            title=title[:300],
+            url=first(row, url_keys),
+            summary=(f"Author: {author} · " if author else "") + body[:1100],
+            source=source or f"Apify/{actor}",
+            published=str(row.get("timestamp") or row.get("createdAt") or row.get("date") or ""),
+            extra={"actor": actor, "author": author},
+        ))
+        if len(out) >= limit:
+            break
+    return out

@@ -104,7 +104,69 @@ def tech(cfg: dict) -> dict:
     }
 
 
-SETS = {"leads": leads, "tech": tech}
+DEFAULT_POSTING_KINDS = {
+    "hiring": "Someone needs work done and is looking to pay for it - a client, employer or agency",
+    "offering": "Someone is advertising their OWN services or availability - a freelancer touting for work",
+    "discussion": "A question, opinion, or general chat about freelancing rather than a real posting",
+}
+
+DEFAULT_WORK_KINDS = {
+    "web_development": "Websites, web apps, frontend, backend, e-commerce, CMS, WordPress, Shopify",
+    "ai_automation": "LLM integration, AI agents, chatbots, RAG, document understanding, prompt work",
+    "workflow_automation": "Make.com, n8n, Zapier, Airtable, Retool, API integrations, RPA, "
+                           "connecting tools together, scraping and data pipelines",
+    "several": "Needs a combination of the above - for example a web app with an AI or automation layer",
+    "other": "A discipline we do not cover - design, video, marketing, copywriting, hardware, native mobile",
+}
+
+DEFAULT_BUDGET_LEVELS = [
+    "No budget or money mentioned at all",
+    "Tiny - a few hundred, or a one-off micro task",
+    "Small - low thousands, a few weeks of work",
+    "Mid - tens of thousands, a real project",
+    "Large - a long engagement, retainer, or six figures",
+]
+
+
+def clients(cfg: dict) -> dict:
+    """Question set for freelance and contract work leads.
+
+    `posting_kind` does the heavy lifting: boards like r/forhire are roughly half
+    people advertising themselves, and a relevance score alone cannot tell the
+    difference between "I need a developer" and "I am a developer". A typed
+    Choice can, and the gate drops the wrong side outright.
+    """
+    include = cfg.get("include", "")
+    exclude = cfg.get("exclude", "")
+    return {
+        "relevant": _relevance(
+            include,
+            exclude,
+            "Judge whether this is work we could win and deliver.",
+        ),
+        "posting_kind": choice(
+            "Is this someone LOOKING TO HIRE, or someone advertising themselves?",
+            cfg.get("posting_kinds", DEFAULT_POSTING_KINDS),
+        ),
+        "work_kind": choice(
+            "What kind of work does this mainly call for.",
+            cfg.get("work_kinds", DEFAULT_WORK_KINDS),
+        ),
+        "budget": score(
+            "How much money this posting implies, judging from any stated rate, "
+            "budget, scope or seniority.",
+            cfg.get("budget_levels", DEFAULT_BUDGET_LEVELS),
+        ),
+        "contactable": noul(
+            "There is a clear way to respond - a contact detail, an application "
+            "link, or an invitation to message.",
+            true_desc="Gives an email, form, link, or explicitly asks people to get in touch",
+            false_desc="No route to reply, or the posting is already closed or filled",
+        ),
+    }
+
+
+SETS = {"leads": leads, "tech": tech, "clients": clients}
 
 
 def build(question_set: str, cfg: dict) -> dict:

@@ -10,6 +10,7 @@
 backend            = "aimlapi"   # "aimlapi" (your AI/ML key) or "typesafe" (native key)
 workers            = 8           # parallel Jev calls
 max_items_per_source = 40
+timeout            = 60      # seconds per Jev call; 30 proved too tight on a cold link
 output_dir         = "out"
 state_dir          = "state"
 
@@ -69,14 +70,22 @@ sources = [
 name          = "AI / tech"
 question_set  = "tech"
 include = """
-Practical AI and software engineering: new models and their capabilities,
-inference APIs and pricing, agent frameworks and tooling, retrieval and
-evaluation techniques, and infrastructure we might actually adopt.
+Four things, all welcome:
+(1) tooling we could adopt - models, inference APIs and their pricing, agent
+    frameworks, SDKs, libraries, infrastructure, anything with working code;
+(2) research worth knowing about - papers, benchmarks and results, but only
+    where the finding would change how someone builds something;
+(3) who is building what - product launches, YC and startup launches, funding,
+    useful as market and partnership signal;
+(4) security and incidents - vulnerabilities, leaks, supply-chain problems in
+    tools a developer might actually be using.
 """
 exclude = """
-Crypto and web3, consumer gadget reviews, culture-war commentary, funding gossip
-with no technical content, generic career advice, and speculation about AGI
-timelines.
+Crypto and web3. Consumer gadget reviews. Politics and general business news.
+Culture-war commentary and AGI-timeline speculation. Career advice. Incremental
+academic papers whose only contribution is a small benchmark gain, a new dataset,
+or a narrow domain application with no released implementation - a paper must
+change how something gets built to count.
 """
 sources = [
   { type = "hn",  query = "AI OR LLM OR model", min_points = 15, name = "Hacker News" },
@@ -93,3 +102,78 @@ base_url        = "https://api.atria-asi.ai/v1"
 model           = "Atria-Dawn-Preview"
 temperature     = 0.3
 checkpoint_path = "state/agent.sqlite"   # conversations survive restarts
+
+# ---------------------------------------------------------------------------
+# Stream 3 - freelance and contract client work
+#
+# The sources below are all free and keyless. Start here and see what a week
+# produces before paying for scraped social media - see the Apify note in
+# the README.
+# ---------------------------------------------------------------------------
+[streams.clients]
+name          = "Client work"
+question_set  = "clients"
+include = """
+Someone looking to PAY for work we can deliver:
+  - web development - sites, web apps, frontend, backend, APIs, e-commerce,
+    CMS, WordPress, Shopify, Webflow;
+  - AI work - LLM integration, AI agents, chatbots, RAG and search over their
+    own documents, prompt engineering, AI features bolted onto an existing app;
+  - workflow automation - Make.com, n8n, Zapier, Airtable, Retool, connecting
+    SaaS tools to each other, API integrations, RPA, scraping, data pipelines,
+    replacing manual spreadsheet and copy-paste work;
+  - and the very common shape: a small business that wants some manual process
+    automated but cannot name the tool it needs.
+Contract, freelance, project, retainer and fractional work all count, remote or
+onsite, any country.
+"""
+exclude = """
+Freelancers advertising their own availability. Full-time salaried employee
+roles requiring relocation. Unpaid, equity-only or "exposure" work. Disciplines
+we do not do: graphic design, video editing, marketing, copywriting, hardware,
+mobile-only native apps. Anything already filled or closed.
+"""
+sources = [
+  # Reddit boards where clients actually post. Keyless RSS; they rate-limit
+  # anonymous traffic, so daily is fine and hourly is not.
+  { type = "reddit", subreddit = "forhire",  name = "r/forhire" },
+  { type = "reddit", subreddit = "jobbit",   name = "r/jobbit" },
+  { type = "reddit", subreddit = "slavelabour", name = "r/slavelabour" },
+
+  # Automation-platform communities. People post "can someone build me this"
+  # constantly, and it rarely reaches the freelance boards.
+  { type = "reddit", subreddit = "n8n",        name = "r/n8n" },
+  { type = "reddit", subreddit = "Zapier",     name = "r/Zapier" },
+  { type = "reddit", subreddit = "nocode",     name = "r/nocode" },
+  { type = "reddit", subreddit = "automation", name = "r/automation" },
+
+  # Where small businesses describe a painful manual process without knowing
+  # it is a software job. High noise, high value when it lands - which is
+  # exactly the case for having a cheap filter read all of it.
+  { type = "reddit", subreddit = "smallbusiness",           query = "automate OR automation OR software OR developer", name = "r/smallbusiness (automation)" },
+  { type = "reddit", subreddit = "EntrepreneurRideAlong",   query = "automate OR developer OR build", name = "r/EntrepreneurRideAlong" },
+
+  # Site-wide searches for the phrases people actually type when they need
+  # this work done.
+  { type = "reddit", query = "\"need a developer\" OR \"looking for a developer\" OR \"hire a developer\"", name = "reddit: needs a developer" },
+  { type = "reddit", query = "\"n8n\" OR \"make.com\" OR \"zapier\" developer needed OR hire OR build", name = "reddit: automation build" },
+  { type = "reddit", query = "\"AI agent\" OR chatbot developer needed OR hire OR build for my business", name = "reddit: AI build" },
+
+  # HN's monthly "Freelancer? Seeking freelancer?" thread lives in COMMENTS,
+  # which is why this one searches comments rather than stories.
+  { type = "hn", tags = "comment", query = "seeking freelancer web developer", name = "HN freelancer thread" },
+
+  # Free JSON feed. Their terms ask for credit and a link to the original
+  # posting, which the item URL provides.
+  { type = "remoteok", tags = ["dev", "javascript", "python", "ai"], name = "RemoteOK" },
+  { type = "hn", tags = "comment", query = "automation n8n zapier make.com integration build", name = "HN automation asks" },
+
+  { type = "rss", url = "https://weworkremotely.com/categories/remote-programming-jobs.rss", name = "We Work Remotely" },
+]
+
+# The single most valuable rule in this file. Boards like r/forhire are roughly
+# half people advertising themselves; no relevance score can tell "I need a
+# developer" from "I am a developer", but a typed Choice can, so those are
+# dropped outright however well they score.
+[gates.drop_choices]
+posting_kind = ["offering"]

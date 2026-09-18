@@ -10,6 +10,7 @@
 backend            = "aimlapi"   # "aimlapi" (your AI/ML key) or "typesafe" (native key)
 workers            = 8           # parallel Jev calls
 max_items_per_source = 40
+timeout            = 60      # seconds per Jev call; 30 proved too tight on a cold link
 output_dir         = "out-demo"
 state_dir          = "state"
 

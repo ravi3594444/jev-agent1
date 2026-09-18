@@ -104,6 +104,42 @@ Neither UK service filters CPV server-side, so those pull a date window and
 filter locally on `72xxxxxx` / `48000000`. The CPV list is in
 `firehose/tenders.py` — widen it there if your work spans other families.
 
+### Client work (stream 3)
+
+Freelance and contract leads, from sources that are all free and keyless:
+r/forhire, r/jobbit, r/slavelabour, Hacker News' monthly "Freelancer? Seeking
+freelancer?" thread (searched as *comments* - that is where it lives), RemoteOK's
+JSON feed, and We Work Remotely.
+
+The rule that makes this stream work is `[gates.drop_choices]`. Boards like
+r/forhire are roughly half people advertising *themselves*, and no relevance
+score can separate "I need a developer" from "I am a developer" - they read
+almost identically. A typed Choice can, so `posting_kind = "offering"` is dropped
+outright however well it scores.
+
+Reddit rate-limits anonymous RSS. Daily is comfortably inside what they tolerate;
+hourly is not.
+
+### Apify, and whether it is worth it
+
+There is an `apify` source type ready to use - point it at any actor:
+
+```toml
+{ type = "apify", actor = "apify~tweet-scraper", name = "X: hiring posts",
+  input = { searchTerms = ["need a web developer", "looking for an AI developer"] } }
+```
+
+It needs `APIFY_TOKEN` in `.env`. Field mapping is configurable because every
+actor emits a different shape; the defaults cover the common ones.
+
+**It is off by default on purpose.** The free sources above cost nothing and are
+where clients who are actually ready to pay tend to post. Apify runs cost money
+per run, take minutes rather than milliseconds, and scraping Instagram, X or
+LinkedIn runs against those platforms' terms - LinkedIn in particular pursues it.
+Run the free sources for a week first, count how many real leads came out, and
+only then decide whether paid scraping adds enough to justify the cost and the
+risk. The plumbing will be waiting.
+
 ### India: there is no legitimate feed, and I won't pretend otherwise
 
 - **CPPP (eprocure.gov.in)** — server-rendered HTML, ~2,700 pages of 10 rows, and

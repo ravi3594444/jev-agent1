@@ -52,6 +52,7 @@ def cmd_run(args: argparse.Namespace) -> int:
             workers=int(run_cfg.get("workers", 8)),
             mock=args.mock,
             stats=stats,
+            timeout=float(run_cfg.get("timeout", 60)),
         )
         all_results.extend(results)
         warnings.extend(warns)

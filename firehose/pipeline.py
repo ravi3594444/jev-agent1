@@ -129,6 +129,14 @@ def gate(answers: dict[str, Any], gates: dict) -> tuple[str, float, float, float
                 and verdict == KEEP:
             verdict = REVIEW
 
+    # a label that disqualifies the item outright, however relevant it looked -
+    # a freelancer advertising themselves is not a client, at any score
+    reject: dict[str, list[str]] = gates.get("drop_choices", {}) or {}
+    for qid, labels in reject.items():
+        a = answers.get(qid)
+        if a is not None and getattr(a, "type", None) == "choice" and a.choice in labels:
+            verdict = DROP if float(a.confidence) >= min_cert else REVIEW
+
     quality, weight = 0.0, 0.0
     for qid in ("fit", "importance"):
         a = answers.get(qid)
@@ -157,6 +165,7 @@ def run_stream(
     workers: int = 8,
     mock: bool = False,
     stats: RunStats | None = None,
+    timeout: float = 60.0,
 ) -> tuple[list[Result], list[str]]:
     items, warnings = fetch_stream(stream_id, stream_cfg.get("sources", []), limit_per_source)
 
@@ -171,14 +180,17 @@ def run_stream(
         return [], warnings
 
     qs = qsets.build(stream_cfg.get("question_set", "tech"), stream_cfg)
-    clf = make_classifier(qs, backend=backend, mock=mock)
+    clf = make_classifier(qs, backend=backend, mock=mock, timeout=timeout)
 
     stats = stats or RunStats()
     started = time.perf_counter()
     try:
+        # return_exceptions keeps one slow or failed call from costing the whole
+        # run - a single timeout loses that item, not the stream
         responses = clf.batch(
             [i.as_state() for i in items],
             config={"max_concurrency": max(1, workers)},
+            return_exceptions=True,
         )
     except Exception as exc:
         warnings.append(f"{stream_id}: scoring failed ({exc.__class__.__name__}: {exc})")
@@ -188,7 +200,13 @@ def run_stream(
     stats.latencies_ms.append(elapsed / max(len(items), 1))
 
     results: list[Result] = []
+    failed: list[str] = []
     for item, resp in zip(items, responses):
+        if isinstance(resp, BaseException):
+            # not marked as seen, so the next run retries it rather than losing it
+            failed.append(f"{resp.__class__.__name__}")
+            stats.errors += 1
+            continue
         stats.add(resp)
         answers = resp.answers
         verdict, p, cert, rank = gate(answers, gates)
@@ -196,6 +214,13 @@ def run_stream(
                               rank=rank, answers=answers, reason=describe(answers)))
         if seen is not None:
             seen.mark(item.id)
+
+    if failed:
+        kinds = ", ".join(sorted(set(failed)))
+        warnings.append(
+            f"{stream_id}: {len(failed)} of {len(items)} item(s) could not be scored "
+            f"({kinds}) - they stay unseen and will be retried next run"
+        )
 
     results.sort(key=lambda r: r.rank, reverse=True)
     return results, warnings
