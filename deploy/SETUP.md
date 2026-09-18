@@ -7,6 +7,8 @@ Target: `e2-small` (2 GB RAM, 1 vCPU), Debian 12, 20 GB disk.
 Reserve a **static** external IP and attach it to the VM — the default
 ephemeral IP changes every stop/start and would break DuckDNS silently.
 
+This deployment: `v-agent.duckdns.org` → `35.200.241.215`.
+
 Open the firewall for web traffic only:
 
 ```bash
@@ -61,7 +63,7 @@ Point your DuckDNS subdomain at the VM's static IP, then keep it honest with a
 cron entry on the VM (harmless if the IP never changes, essential if it does):
 
 ```
-*/5 * * * * curl -fsS "https://www.duckdns.org/update?domains=YOURNAME&token=YOUR_DUCKDNS_TOKEN&ip=" >/dev/null
+*/5 * * * * curl -fsS "https://www.duckdns.org/update?domains=v-agent&token=YOUR_DUCKDNS_TOKEN&ip=" >/dev/null
 ```
 
 Leaving `ip=` empty makes DuckDNS use the source IP of the request, so you
@@ -71,7 +73,7 @@ never have to hardcode it.
 
 ```bash
 sudo cp Caddyfile /etc/caddy/Caddyfile
-sudo nano /etc/caddy/Caddyfile   # set YOURNAME to your DuckDNS subdomain
+sudo nano /etc/caddy/Caddyfile   # already set to v-agent.duckdns.org
 sudo systemctl restart caddy
 ```
 
@@ -84,26 +86,40 @@ automatic — nothing to schedule.
 ## 6. Services
 
 ```bash
-sudo cp deploy/firehose-web.service /etc/systemd/system/
-sudo cp deploy/firehose.service deploy/firehose.timer /etc/systemd/system/
+sudo cp deploy/firehose-web.service deploy/firehose-next.service \
+       deploy/firehose.service deploy/firehose.timer /etc/systemd/system/
+
 sudo useradd -r -s /usr/sbin/nologin firehose || true
+
+# these are gitignored, so a fresh clone does not have them, and the scorer
+# unit will refuse to start if they are missing
+sudo mkdir -p /opt/firehose/out /opt/firehose/state
 sudo chown -R firehose:firehose /opt/firehose
+
 sudo systemctl daemon-reload
-sudo systemctl enable --now firehose-web.service   # the bridge
-sudo systemctl enable --now firehose.timer         # the daily scorer
+sudo systemctl enable --now firehose-web.service    # the bridge  (:8000)
+sudo systemctl enable --now firehose-next.service   # the web UI  (:3000)
+sudo systemctl enable --now firehose.timer          # daily scorer
 ```
 
-The Next server needs a unit too — copy `firehose-next.service`, then:
+Do one scoring run now, so there is something to chat about:
 
 ```bash
-sudo systemctl enable --now firehose-next.service
-python3 -m firehose run        # first run, so there is something to chat about
+sudo -u firehose bash -c 'set -a; . /opt/firehose/.env; set +a; cd /opt/firehose && python3 -m firehose run'
+```
+
+Check all three came up:
+
+```bash
+systemctl status firehose-web firehose-next --no-pager
+systemctl list-timers firehose.timer --no-pager
+curl -s localhost:8000/api/health
 ```
 
 ## 7. Check it
 
 ```
-https://YOURNAME.duckdns.org
+https://v-agent.duckdns.org
 ```
 
 Browser asks for the Caddy password, then the chat loads.

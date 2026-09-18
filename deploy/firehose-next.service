@@ -8,8 +8,10 @@ WorkingDirectory=/opt/firehose/web
 EnvironmentFile=/opt/firehose/.env
 Environment=FIREHOSE_BRIDGE=http://127.0.0.1:8000
 Environment=NODE_ENV=production
-# npx directly, not `npm run start` — the npm wrapper costs ~79 MB for nothing
-ExecStart=/usr/bin/npx next start --port 3000 --hostname 127.0.0.1
+# systemd gives no HOME, and npx wants one for its cache — call the binary
+# npm already installed instead. Also skips the ~79 MB `npm run start` wrapper.
+Environment=HOME=/opt/firehose
+ExecStart=/opt/firehose/web/node_modules/.bin/next start --port 3000 --hostname 127.0.0.1
 Restart=on-failure
 RestartSec=5
 User=firehose

@@ -11,8 +11,9 @@ EnvironmentFile=/opt/firehose/.env
 ExecStart=/usr/bin/python3 -m firehose run
 User=firehose
 Group=firehose
-# the scorer only writes under out/ and state/
+# the rest of the filesystem stays read-only; the app dir must be writable
+# because the scorer creates out/ and state/ on first run
 ProtectSystem=strict
-ReadWritePaths=/opt/firehose/out /opt/firehose/state
+ReadWritePaths=/opt/firehose
 PrivateTmp=true
 NoNewPrivileges=true
