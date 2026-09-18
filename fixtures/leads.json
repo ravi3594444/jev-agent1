@@ -1,0 +1,72 @@
+[
+ {
+  "title": "RFP: Cloud migration and data platform modernisation for regional health authority",
+  "summary": "Seeking a technical partner to migrate 40 legacy applications to a cloud platform and build a unified data layer. Submissions close 14 October 2026.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/0",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Tender notice: AI-assisted document processing for municipal records office",
+  "summary": "Automation of intake, classification and routing for approximately 2M archived documents. Two-stage procurement, EOI first.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/1",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Contract awarded: national payroll system integration",
+  "summary": "The framework has been awarded to an incumbent supplier for a four-year term.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/2",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Framework agreement: software development and systems integration services",
+  "summary": "Multi-supplier framework covering bespoke development, integration and support. Deadline 3 November 2026.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/3",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Invitation to tender: canteen catering services for three campuses",
+  "summary": "Provision of daily catering, including staffing and equipment maintenance.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/4",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "RFQ: road resurfacing and drainage works, sector 7",
+  "summary": "Civil works package covering 11km of carriageway.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/5",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Call for partners: retrieval-augmented search across enterprise knowledge base",
+  "summary": "Looking for a delivery partner with production RAG experience. Short engagement, possible extension.",
+  "source": "HN who-is-hiring / RFPs",
+  "url": "https://example.invalid/leads/6",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Prequalification: managed cloud hosting and DevOps support",
+  "summary": "EOI stage only; shortlisted suppliers will be invited to the main tender in Q1.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/7",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Supply of office furniture for new administrative building",
+  "summary": "Desks, chairs and storage units, delivery and installation included.",
+  "source": "TED (EU tenders)",
+  "url": "https://example.invalid/leads/8",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "RFP: machine learning model monitoring and evaluation tooling",
+  "summary": "Build and operate drift detection, evaluation harnesses and dashboards for a production ML estate. Closes 29 September 2026.",
+  "source": "HN who-is-hiring / RFPs",
+  "url": "https://example.invalid/leads/9",
+  "published": "2026-09-18T08:00:00Z"
+ }
+]

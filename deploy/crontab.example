@@ -1,0 +1,12 @@
+# Firehose — score the feeds every weekday morning.
+# Install with:  crontab -e
+#
+# Notes:
+#   * `. .env` loads the keys; cron gets almost no environment of its own.
+#   * dedupe means a run only pays for items it has not seen, so daily is cheap.
+#   * a run that finds nothing new leaves the existing digest untouched.
+
+0 8 * * 1-5  cd /opt/firehose && . ./.env && /usr/bin/python3 -m firehose run >> /var/log/firehose.log 2>&1
+
+# SAM.gov note: a brand-new API key with no SAM.gov role is capped near 10
+# requests/day. Keep this daily, not hourly, or you will burn the quota.

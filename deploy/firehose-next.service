@@ -1,0 +1,20 @@
+# /etc/systemd/system/firehose-next.service — the web UI
+[Unit]
+Description=Firehose web UI (Next.js)
+After=network-online.target firehose-web.service
+
+[Service]
+WorkingDirectory=/opt/firehose/web
+EnvironmentFile=/opt/firehose/.env
+Environment=FIREHOSE_BRIDGE=http://127.0.0.1:8000
+Environment=NODE_ENV=production
+# npx directly, not `npm run start` — the npm wrapper costs ~79 MB for nothing
+ExecStart=/usr/bin/npx next start --port 3000 --hostname 127.0.0.1
+Restart=on-failure
+RestartSec=5
+User=firehose
+Group=firehose
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

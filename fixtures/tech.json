@@ -1,0 +1,86 @@
+[
+ {
+  "title": "TypeSafe ships Jev, a model that returns typed decisions instead of text",
+  "summary": "Jev answers Choice, Score and Noul questions in 70-500ms with calibrated confidence, and bills input tokens only.",
+  "source": "Hacker News",
+  "url": "https://example.invalid/tech/0",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Show HN: I rewrote our RAG reranker and cut p95 latency by 60%",
+  "summary": "Swapping the cross-encoder for a batched classifier dropped our reranking stage from 1.9s to 740ms without hurting nDCG.",
+  "source": "Hacker News",
+  "url": "https://example.invalid/tech/1",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "arXiv: Calibrated confidence in parallel-sampled classifiers",
+  "summary": "We show that parallel sampling with a calibration objective yields confidence estimates that correlate with accuracy across eight benchmarks.",
+  "source": "arXiv cs.CL",
+  "url": "https://example.invalid/tech/2",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Bitcoin ETF inflows hit a new weekly record",
+  "summary": "Institutional demand pushed net inflows past $2.4bn as spot products continued to absorb supply.",
+  "source": "Hacker News",
+  "url": "https://example.invalid/tech/3",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "The best mechanical keyboards of 2026, tested",
+  "summary": "We spent four months typing on 31 boards to find the ones worth your desk space.",
+  "source": "Hacker News",
+  "url": "https://example.invalid/tech/4",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "LangChain adds native middleware for decision models",
+  "summary": "ModelRouterMiddleware routes by complexity; AutoModeMiddleware screens risky tool calls before execution.",
+  "source": "Hacker News",
+  "url": "https://example.invalid/tech/5",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Why our team stopped using vector databases for small corpora",
+  "summary": "Under 50k documents, a well-tuned BM25 plus a reranker beat our managed vector store on both cost and recall.",
+  "source": "HN front page",
+  "url": "https://example.invalid/tech/6",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Ask HN: how do you evaluate agent reliability in production?",
+  "summary": "We have agents doing real work and no good way to catch silent regressions. What actually works for you?",
+  "source": "Hacker News",
+  "url": "https://example.invalid/tech/7",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "AGI is five years away, says panel at industry summit",
+  "summary": "Speakers disagreed sharply on definitions but agreed the timeline has compressed.",
+  "source": "HN front page",
+  "url": "https://example.invalid/tech/8",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Cloudflare adds decision models to Workers AI",
+  "summary": "You can now run typed classification at the edge with no backend of your own.",
+  "source": "Hacker News",
+  "url": "https://example.invalid/tech/9",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "A practical guide to confidence-gated automation",
+  "summary": "Auto-act above 0.9, escalate below 0.6, and route the middle band to a human. Here is how we picked the thresholds.",
+  "source": "HN front page",
+  "url": "https://example.invalid/tech/10",
+  "published": "2026-09-18T08:00:00Z"
+ },
+ {
+  "title": "Postgres 19 release notes",
+  "summary": "Improved parallel vacuum, better partition pruning, and a new planner hint mechanism.",
+  "source": "HN front page",
+  "url": "https://example.invalid/tech/11",
+  "published": "2026-09-18T08:00:00Z"
+ }
+]

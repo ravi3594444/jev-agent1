@@ -1,0 +1,18 @@
+# /etc/systemd/system/firehose.service
+[Unit]
+Description=Firehose — score feeds with Jev
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/firehose
+EnvironmentFile=/opt/firehose/.env
+ExecStart=/usr/bin/python3 -m firehose run
+User=firehose
+Group=firehose
+# the scorer only writes under out/ and state/
+ProtectSystem=strict
+ReadWritePaths=/opt/firehose/out /opt/firehose/state
+PrivateTmp=true
+NoNewPrivileges=true

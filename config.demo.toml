@@ -1,0 +1,76 @@
+# ---------------------------------------------------------------------------
+# Firehose config. Everything you would normally want to tune lives here.
+#
+# The two strings that matter most are `include` and `exclude` in each stream -
+# they are what Jev judges relevance against. Write them the way you would brief
+# a new assistant: concrete, in your own words.
+# ---------------------------------------------------------------------------
+
+[run]
+backend            = "aimlapi"   # "aimlapi" (your AI/ML key) or "typesafe" (native key)
+workers            = 8           # parallel Jev calls
+max_items_per_source = 40
+output_dir         = "out-demo"
+state_dir          = "state"
+
+[gates]
+# Relevance is a probability. Confidence is how sure the model is of that call.
+keep         = 0.72   # at or above this, and confident -> KEEP
+drop         = 0.45   # below this, and confident       -> DROP
+min_certainty = 0.60  # below this confidence, always   -> REVIEW (never auto-decided)
+
+# Typed answers that must never become a silent KEEP. Anything landing on one of
+# these labels (confidently) is pushed down to REVIEW instead.
+[gates.demote_choices]
+kind = ["award_notice", "not_an_opportunity"]
+
+# ---------------------------------------------------------------------------
+# Stream 1 - business leads
+# EDIT `include` / `exclude` to describe Constrivo's actual services.
+# ---------------------------------------------------------------------------
+[streams.leads]
+name          = "Business leads"
+question_set  = "leads"
+include = """
+Tenders, RFPs, RFQs, contract notices, framework agreements or partner calls for
+work we can deliver: software development, data engineering, AI and automation
+integration, cloud migration, systems integration, and related technical
+consulting. Public-sector and enterprise buyers both count.
+"""
+exclude = """
+Physical construction, civil works, catering, staffing agencies, equipment supply
+with no technical services, and anything already awarded or closed. General
+industry news or commentary is not an opportunity.
+"""
+sources = [
+  { type = "fixture", path = "fixtures/leads.json", name = "demo leads" },
+]
+
+# ---------------------------------------------------------------------------
+# Stream 2 - AI and tech news
+# ---------------------------------------------------------------------------
+[streams.tech]
+name          = "AI / tech"
+question_set  = "tech"
+include = """
+Practical AI and software engineering: new models and their capabilities,
+inference APIs and pricing, agent frameworks and tooling, retrieval and
+evaluation techniques, and infrastructure we might actually adopt.
+"""
+exclude = """
+Crypto and web3, consumer gadget reviews, culture-war commentary, funding gossip
+with no technical content, generic career advice, and speculation about AGI
+timelines.
+"""
+sources = [
+  { type = "fixture", path = "fixtures/tech.json", name = "demo tech" },
+]
+
+# ---------------------------------------------------------------------------
+# Agent (the chat half)
+# ---------------------------------------------------------------------------
+[agent]
+base_url        = "https://api.atria-asi.ai/v1"
+model           = "Atria-Dawn-Preview"
+temperature     = 0.3
+checkpoint_path = "state/agent.sqlite"   # conversations survive restarts
