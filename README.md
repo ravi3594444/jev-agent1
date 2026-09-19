@@ -22,7 +22,7 @@ news feeds  ───┼─► Jev (typed, calibrated) ─► keep / review / dr
 |---|---|---|
 | ingest + scoring | plain Python, stdlib only | A parallel map over items — no branches, no cycles, no carried state. A graph framework would add per-item overhead to an operation whose whole selling point is 100ms. Runs as a cron job anywhere. |
 | the agent | LangGraph + `langchain-typesafe` | Chat, tools and memory genuinely are a state machine. Conversation persistence, LangSmith tracing and interrupts come for free. |
-| the chat UI | Next.js + Vercel AI SDK | The SDK does streaming plumbing only. **Every component is hand-written** — no component library, no AI Elements. |
+| the chat UI | Next.js + Vercel AI SDK + AI Elements | The SDK does the streaming; **AI Elements does the interface** — conversation, message, reasoning, tool and prompt-input components, vendored as source so they stay editable. Only a scored-corpus row is built here, because the kit has none. |
 
 Jev is reached through the official `langchain-typesafe` package. One subclass in
 `firehose/jev.py` swaps the route to `/v1/decisions` because your key is from
@@ -188,6 +188,28 @@ every tool call and token.
 
 ---
 
+## The web UI
+
+The browser half is [Vercel AI Elements](https://ai-sdk.dev/elements) on
+shadcn/ui and Tailwind v4 — the same components Vercel ships for AI apps, copied
+into `web/components/ai-elements/` as ordinary source you can edit.
+
+- **Chat** — `Conversation`, `Message`, `MessageResponse` (Streamdown does the
+  markdown), `PromptInput`, `Suggestion`.
+- **Thinking** — `Reasoning` renders whatever the model exposes as thinking;
+  `ChainOfThought` turns the turn's tool calls into a step trace.
+- **Tools** — every call is a `Tool` card with its real parameters and result.
+- **Dashboard** — an `Artifact` panel: corpus verdicts, streams, a `Task` feed of
+  the session's calls, and the items the agent surfaced.
+
+One thing AI Elements has no component for is a scored-corpus row, so
+`item-row.tsx` and the verdict meter are built on the same primitives. Nothing
+else is hand-rolled.
+
+To pull in more of the kit: `npx ai-elements@latest add <component>`.
+
+---
+
 ## Scheduling
 
 `deploy/` has a cron line, a systemd service + timer, and there's a GitHub
@@ -249,6 +271,8 @@ firehose/
   __main__.py   run / chat / ask
 web/
   app/api/chat  translates the bridge's events into the AI SDK stream
-  components/   Chat, Composer, ToolCard, ItemCard, Markdown, StatsBar
+  components/ai-elements/  Vercel AI Elements, vendored as source
+  components/   workspace (shell), chat-panel, dashboard, item-row
+  components/ui/           the shadcn/ui primitives AI Elements builds on
 deploy/         cron, systemd service + timer
 ```

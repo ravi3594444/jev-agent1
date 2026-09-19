@@ -3,6 +3,7 @@
 Deliberately dumb wire format. This emits newline-delimited JSON events:
 
     {"type":"text",       "delta": "..."}
+    {"type":"reasoning",  "delta": "..."}
     {"type":"tool-start", "id": "...", "name": "ask_jev", "args": {...}}
     {"type":"tool-end",   "id": "...", "result": {...}}
     {"type":"error",      "message": "..."}
@@ -124,6 +125,30 @@ def _text_of(content: Any) -> str:
     return ""
 
 
+def _reasoning_of(chunk: Any) -> str:
+    """Thinking tokens, where the provider separates them from the answer.
+
+    Anthropic and friends put them in content blocks; several OpenAI-compatible
+    providers hang them off additional_kwargs instead. Neither is guaranteed to
+    be present - a model that does not expose its reasoning just yields "".
+    """
+    out = []
+    content = getattr(chunk, "content", "")
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            kind = block.get("type")
+            if kind in {"reasoning", "thinking"}:
+                out.append(str(block.get(kind) or block.get("text") or ""))
+    extra = getattr(chunk, "additional_kwargs", None) or {}
+    for key in ("reasoning_content", "reasoning"):
+        value = extra.get(key)
+        if isinstance(value, str):
+            out.append(value)
+    return "".join(out)
+
+
 def _events(message: str, thread: str) -> Iterator[str]:
     def emit(obj: dict) -> str:
         return json.dumps(obj, default=str) + "\n"
@@ -149,6 +174,9 @@ def _events(message: str, thread: str) -> Iterator[str]:
                 # tokens belong in the assistant text stream
                 if not isinstance(chunk, (AIMessageChunk, AIMessage)):
                     continue
+                thought = _reasoning_of(chunk)
+                if thought:
+                    yield emit({"type": "reasoning", "delta": thought})
                 text = _text_of(getattr(chunk, "content", ""))
                 if text:
                     yield emit({"type": "text", "delta": text})

@@ -1,5 +1,5 @@
-import Chat from "@/components/Chat";
+import { Workspace } from "@/components/workspace";
 
 export default function Page() {
-  return <Chat />;
+  return <Workspace />;
 }

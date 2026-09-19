@@ -1,4 +1,9 @@
 import type { Metadata } from "next";
+import { GeistMono } from "geist/font/mono";
+import { GeistSans } from "geist/font/sans";
+
+import { ThemeProvider } from "@/components/theme-provider";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -6,16 +11,19 @@ export const metadata: Metadata = {
   description: "Ask about everything Jev read today.",
 };
 
-// Set the theme before paint so a dark-mode reload never flashes white.
-const THEME_BOOT = `(function(){try{var t=localStorage.getItem('fh-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`;
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
-      </head>
-      <body>{children}</body>
+    <html className={`${GeistSans.variable} ${GeistMono.variable}`} lang="en" suppressHydrationWarning>
+      <body className="font-sans antialiased">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          disableTransitionOnChange
+          enableSystem
+        >
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }
