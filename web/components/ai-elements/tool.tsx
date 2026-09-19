@@ -19,7 +19,18 @@ import {
 import type { ComponentProps, ReactNode } from "react";
 import { isValidElement } from "react";
 
-import { CodeBlock } from "./code-block";
+/**
+ * Upstream renders these through the kit's CodeBlock, which is backed by shiki.
+ * A syntax highlighter has nothing to say in a monochrome interface - its whole
+ * output is hue - and shiki's github themes paint JSON numbers #005cc5. So the
+ * structure is carried by indentation instead, and the highlighter is not
+ * shipped at all, which is also the single biggest thing on this page.
+ */
+const Json = ({ code }: { code: string }) => (
+  <pre className="overflow-x-auto p-3 font-mono text-foreground text-xs leading-relaxed">
+    {code}
+  </pre>
+);
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
@@ -54,14 +65,17 @@ const statusLabels: Record<ToolPart["state"], string> = {
   "output-error": "Error",
 };
 
+// Upstream tints these yellow/blue/green/orange/red. This app is monochrome, so
+// the icon shape and the label beside it carry the state instead - which also
+// means the state survives being read by someone who cannot see the hue.
 const statusIcons: Record<ToolPart["state"], ReactNode> = {
-  "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
-  "approval-responded": <CheckCircleIcon className="size-4 text-blue-600" />,
-  "input-available": <ClockIcon className="size-4 animate-pulse" />,
-  "input-streaming": <CircleIcon className="size-4" />,
-  "output-available": <CheckCircleIcon className="size-4 text-green-600" />,
-  "output-denied": <XCircleIcon className="size-4 text-orange-600" />,
-  "output-error": <XCircleIcon className="size-4 text-red-600" />,
+  "approval-requested": <ClockIcon className="size-4 text-muted-foreground" />,
+  "approval-responded": <CheckCircleIcon className="size-4 text-muted-foreground" />,
+  "input-available": <ClockIcon className="size-4 animate-pulse text-muted-foreground" />,
+  "input-streaming": <CircleIcon className="size-4 text-muted-foreground" />,
+  "output-available": <CheckCircleIcon className="size-4 text-foreground" />,
+  "output-denied": <XCircleIcon className="size-4 text-muted-foreground" />,
+  "output-error": <XCircleIcon className="size-4 text-foreground" />,
 };
 
 export const getStatusBadge = (status: ToolPart["state"]) => (
@@ -122,7 +136,7 @@ export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
       Parameters
     </h4>
     <div className="rounded-md bg-muted/50">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+      <Json code={JSON.stringify(input, null, 2)} />
     </div>
   </div>
 );
@@ -145,11 +159,9 @@ export const ToolOutput = ({
   let Output = <div>{output as ReactNode}</div>;
 
   if (typeof output === "object" && !isValidElement(output)) {
-    Output = (
-      <CodeBlock code={JSON.stringify(output, null, 2)} language="json" />
-    );
+    Output = <Json code={JSON.stringify(output, null, 2)} />;
   } else if (typeof output === "string") {
-    Output = <CodeBlock code={output} language="json" />;
+    Output = <Json code={output} />;
   }
 
   return (

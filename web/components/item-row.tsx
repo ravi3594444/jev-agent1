@@ -15,6 +15,8 @@ const VERDICT_VARIANT = {
 
 export type ItemRowProps = {
   item: Item;
+  /** the agent looked at this row in this session */
+  cited?: boolean;
   className?: string;
 };
 
@@ -22,13 +24,20 @@ export type ItemRowProps = {
  * One scored record. AI Elements has no component for a ranked corpus row, so
  * this is built from the same shadcn primitives the rest of the kit uses.
  */
-export const ItemRow = ({ item, className }: ItemRowProps) => {
+export const ItemRow = ({ item, cited, className }: ItemRowProps) => {
   const measure = scoreOf(item);
   const verdict = item.verdict as keyof typeof VERDICT_VARIANT | undefined;
   const meta = [item.source, item.stream, item.signals].filter(Boolean).join(" · ");
 
   return (
-    <div className={cn("space-y-2 rounded-md border bg-card p-3", className)}>
+    <div
+      className={cn(
+        "space-y-2 rounded-md border bg-card p-3",
+        // no colour to mark a cited row with, so it gets weight on its edge
+        cited && "border-l-[3px] border-l-foreground",
+        className,
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           {item.url ? (
@@ -46,11 +55,18 @@ export const ItemRow = ({ item, className }: ItemRowProps) => {
           )}
           {meta && <p className="line-clamp-1 text-muted-foreground text-xs">{meta}</p>}
         </div>
-        {verdict && (
-          <Badge className="shrink-0 capitalize" variant={VERDICT_VARIANT[verdict] ?? "outline"}>
-            {verdict}
-          </Badge>
-        )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {cited && (
+            <Badge className="font-normal" title="the agent used this row" variant="outline">
+              cited
+            </Badge>
+          )}
+          {verdict && (
+            <Badge className="capitalize" variant={VERDICT_VARIANT[verdict] ?? "outline"}>
+              {verdict}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {measure && (

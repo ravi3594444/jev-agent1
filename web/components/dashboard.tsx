@@ -1,7 +1,7 @@
 "use client";
 
-import { LayersIcon, RefreshCwIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { RefreshCwIcon } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   Artifact,
@@ -14,14 +14,23 @@ import {
   ArtifactTitle,
 } from "@/components/ai-elements/artifact";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Task, TaskContent, TaskItem, TaskItemFile, TaskTrigger } from "@/components/ai-elements/task";
+import {
+  Task,
+  TaskContent,
+  TaskItem,
+  TaskItemFile,
+  TaskTrigger,
+} from "@/components/ai-elements/task";
 import { ItemRow } from "@/components/item-row";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   headline,
   type Item,
+  PILE_TABS,
+  type PileTab,
   type Stats,
   summarise,
   type ToolPart,
@@ -29,29 +38,12 @@ import {
   toolNameOf,
   VERDICTS,
 } from "@/lib/firehose";
-
-const useStats = () => {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    fetch("/api/stats", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: Stats) => setStats(d))
-      .catch(() => setStats(null))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(load, [load]);
-
-  return { load, loading, stats };
-};
+import { useItems, useStats } from "@/lib/use-firehose";
 
 /**
  * Verdict split. AI Elements has no stat or chart element, so this is the one
- * piece built by hand - on the same primitives, direct-labelled so a colour
- * never carries the meaning alone.
+ * piece built by hand - on the same primitives, direct-labelled so nothing
+ * depends on a colour that this theme does not have.
  */
 const VerdictSplit = ({ stats }: { stats: Stats }) => {
   const counts = stats.by_verdict ?? {};
@@ -102,12 +94,22 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
 
 export type DashboardProps = {
   activity: ToolPart[];
-  items: Item[];
+  cited: Item[];
   onClose?: () => void;
 };
 
-export const Dashboard = ({ activity, items, onClose }: DashboardProps) => {
-  const { stats, loading, load } = useStats();
+export const Dashboard = ({ activity, cited, onClose }: DashboardProps) => {
+  const [tab, setTab] = useState<PileTab>("keep");
+
+  const stats = useStats();
+  const pile = useItems(tab);
+
+  const refresh = useCallback(() => {
+    stats.reload();
+    pile.reload();
+  }, [stats, pile]);
+
+  const onTabChange = useCallback((value: string) => setTab(value as PileTab), []);
 
   const spend = useMemo(
     () =>
@@ -118,40 +120,89 @@ export const Dashboard = ({ activity, items, onClose }: DashboardProps) => {
     [activity],
   );
 
+  // a row the agent touched keeps whatever the agent measured about it - an
+  // ask_jev probability is more interesting than the stored relevance
+  const rows = useMemo(() => {
+    const byId = new Map(cited.map((item) => [item.id, item]));
+    return pile.items.map((item) => {
+      const seen = byId.get(item.id);
+      return seen ? { ...item, ...seen, cited: true } : item;
+    });
+  }, [pile.items, cited]);
+
+  const corpus = stats.data;
+
   return (
     <Artifact className="h-full rounded-none border-0 shadow-none">
       <ArtifactHeader>
         <div className="min-w-0">
           <ArtifactTitle>Today&apos;s corpus</ArtifactTitle>
           <ArtifactDescription>
-            {stats ? `${stats.total} items scored` : loading ? "loading…" : "bridge unreachable"}
-            {stats?.mock ? " · mock data" : ""}
+            {corpus
+              ? `${corpus.total} items scored`
+              : stats.loading
+                ? "loading…"
+                : "bridge unreachable"}
+            {corpus?.mock ? " · mock data" : ""}
           </ArtifactDescription>
         </div>
         <ArtifactActions>
           <ArtifactAction
-            disabled={loading}
+            disabled={stats.loading || pile.loading}
             icon={RefreshCwIcon}
-            onClick={load}
-            tooltip="Refresh stats"
+            onClick={refresh}
+            tooltip="Refresh"
           />
           {onClose && <ArtifactClose onClick={onClose} />}
         </ArtifactActions>
       </ArtifactHeader>
 
       <ArtifactContent className="space-y-6">
-        {stats ? (
+        {corpus ? (
           <>
             <Section title="Verdicts">
-              <VerdictSplit stats={stats} />
+              <VerdictSplit stats={corpus} />
             </Section>
             <Section title="Streams">
-              <Streams stats={stats} />
+              <Streams stats={corpus} />
             </Section>
           </>
         ) : (
-          loading && <Shimmer duration={1}>Counting the corpus…</Shimmer>
+          stats.loading && <Shimmer duration={1}>Counting the corpus…</Shimmer>
         )}
+
+        <Separator />
+
+        <Section title="The pile">
+          <Tabs onValueChange={onTabChange} value={tab}>
+            <TabsList className="w-full">
+              {PILE_TABS.map(({ label, value }) => (
+                <TabsTrigger key={value} value={value}>
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          {pile.loading && rows.length === 0 && <Shimmer duration={1}>Reading the pile…</Shimmer>}
+
+          {pile.failed && (
+            <p className="text-muted-foreground text-sm">
+              Could not reach the bridge. The corpus is served by{" "}
+              <code className="font-mono text-xs">/api/items</code>.
+            </p>
+          )}
+
+          {!(pile.loading || pile.failed) && rows.length === 0 && (
+            <p className="text-muted-foreground text-sm">Nothing in this pile today.</p>
+          )}
+
+          <div className="space-y-2">
+            {rows.map((item) => (
+              <ItemRow cited={item.cited} item={item} key={item.id} />
+            ))}
+          </div>
+        </Section>
 
         <Separator />
 
@@ -188,26 +239,6 @@ export const Dashboard = ({ activity, items, onClose }: DashboardProps) => {
                   Typed questions this session cost{" "}
                   <span className="font-mono tabular-nums">${spend.toFixed(6)}</span>.
                 </p>
-              )}
-            </div>
-          )}
-        </Section>
-
-        <Separator />
-
-        <Section title={`Items surfaced${items.length ? ` (${items.length})` : ""}`}>
-          {items.length === 0 ? (
-            <p className="flex items-center gap-2 text-muted-foreground text-sm">
-              <LayersIcon className="size-4" />
-              Items the agent opens or ranks collect here.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {items.slice(0, 24).map((item) => (
-                <ItemRow item={item} key={item.id} />
-              ))}
-              {items.length > 24 && (
-                <p className="text-muted-foreground text-xs">+{items.length - 24} more</p>
               )}
             </div>
           )}

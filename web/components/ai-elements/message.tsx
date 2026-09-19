@@ -13,9 +13,6 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
@@ -321,7 +318,10 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-const streamdownPlugins = { cjk, code, math, mermaid };
+// mermaid and math are dropped from the upstream plugin set: this agent
+// answers in prose about tenders, and the two of them are most of the
+// first-load bundle. Add them back if the corpus ever needs a diagram.
+const streamdownPlugins = { cjk };
 
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (

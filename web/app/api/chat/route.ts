@@ -1,14 +1,8 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 
+import { BRIDGE, bridgeHeaders } from "@/lib/bridge";
+
 export const maxDuration = 300;
-
-const BRIDGE = process.env.FIREHOSE_BRIDGE ?? "http://127.0.0.1:8000";
-const TOKEN = process.env.FIREHOSE_TOKEN ?? "";
-
-/** Server-side only — the bridge token never reaches the browser. */
-function bridgeHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return TOKEN ? { ...extra, authorization: `Bearer ${TOKEN}` } : extra;
-}
 
 type BridgeEvent =
   | { type: "text"; delta: string }

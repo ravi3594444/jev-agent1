@@ -40,6 +40,8 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
+import { ItemRow } from "@/components/item-row";
+import { Button } from "@/components/ui/button";
 import {
   headline,
   isToolPart,
@@ -50,6 +52,7 @@ import {
   toolMeta,
   toolNameOf,
 } from "@/lib/firehose";
+import { useItems } from "@/lib/use-firehose";
 
 const STARTERS = [
   "What should I look at first today?",
@@ -72,6 +75,87 @@ const stepStatus = (state?: string): "complete" | "active" | "pending" => {
   if (state === "input-streaming") return "pending";
   return "active";
 };
+
+/**
+ * What Jev actually kept today, on the opening screen. Only mounted where the
+ * dashboard rail is not - otherwise the first thing you see is an empty chat
+ * telling you it could answer questions, which is not the same as an answer.
+ */
+const OpeningPile = ({ onOpenDashboard }: { onOpenDashboard: () => void }) => {
+  const { items, loading, failed } = useItems("keep", 6);
+
+  if (failed || (!loading && items.length === 0)) return null;
+
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+          Kept today
+        </h3>
+        <Button className="h-auto p-0 text-xs" onClick={onOpenDashboard} size="sm" variant="link">
+          the whole pile
+        </Button>
+      </div>
+
+      {loading ? (
+        <Shimmer duration={1}>Reading the pile…</Shimmer>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <ItemRow item={item} key={item.id} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
+const Composer = ({
+  status,
+  showStarters,
+  onSubmit,
+  onSuggest,
+  onStop,
+}: {
+  status: ChatStatus;
+  showStarters: boolean;
+  onSubmit: (message: PromptInputMessage) => void;
+  onSuggest: (suggestion: string) => void;
+  onStop: () => void;
+}) => (
+  <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-3 px-4 pb-4">
+    {showStarters && (
+      <Suggestions>
+        {STARTERS.map((starter) => (
+          <Suggestion key={starter} onClick={onSuggest} suggestion={starter} />
+        ))}
+      </Suggestions>
+    )}
+
+    <PromptInput onSubmit={onSubmit}>
+      <PromptInputBody>
+        <PromptInputTextarea placeholder="Ask about anything Jev read today…" />
+      </PromptInputBody>
+      <PromptInputFooter>
+        <PromptInputTools>
+          <span className="px-1 text-muted-foreground text-xs">
+            Enter to send · Shift+Enter for a new line
+          </span>
+        </PromptInputTools>
+        <PromptInputSubmit onStop={onStop} status={status} />
+      </PromptInputFooter>
+    </PromptInput>
+  </div>
+);
+
+const Opening = ({ className }: { className?: string }) => (
+  <ConversationEmptyState
+    className={className}
+    description="Firehose can search what was scored, open any item, and — the useful part — ask Jev a brand new typed question across the whole corpus in about a second."
+    icon={<MessagesSquareIcon className="size-8" />}
+    title="Ask about everything Jev read today"
+  />
+);
 
 const CopyAction = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
@@ -176,18 +260,23 @@ export type ChatPanelProps = {
   messages: UIMessage[];
   status: ChatStatus;
   error?: Error;
+  /** true where no dashboard rail is showing, so the pile belongs here instead */
+  showPile: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
   onRetry: () => void;
+  onOpenDashboard: () => void;
 };
 
 export const ChatPanel = ({
   messages,
   status,
   error,
+  showPile,
   onSend,
   onStop,
   onRetry,
+  onOpenDashboard,
 }: ChatPanelProps) => {
   const busy = status === "submitted" || status === "streaming";
 
@@ -206,18 +295,34 @@ export const ChatPanel = ({
     [busy, onSend],
   );
 
+  // The conversation sticks to the bottom, which is right for a chat and wrong
+  // for an opening screen: you would land halfway down the pile. So the opening
+  // screen that carries the pile is a plain scroller of its own.
+  if (messages.length === 0 && showPile) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4">
+            <Opening className="pb-0" />
+            <OpeningPile onOpenDashboard={onOpenDashboard} />
+          </div>
+        </div>
+        <Composer
+          onStop={onStop}
+          onSubmit={submit}
+          onSuggest={suggest}
+          showStarters
+          status={status}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Conversation>
         <ConversationContent className="mx-auto w-full max-w-3xl">
-          {messages.length === 0 && (
-            <ConversationEmptyState
-              className="min-h-[55vh]"
-              description="Firehose can search what was scored, open any item, and — the useful part — ask Jev a brand new typed question across the whole corpus in about a second."
-              icon={<MessagesSquareIcon className="size-8" />}
-              title="Ask about everything Jev read today"
-            />
-          )}
+          {messages.length === 0 && <Opening className="min-h-[55vh]" />}
 
           {messages.map((message, index) => {
             const parts = (message.parts ?? []) as AnyPart[];
@@ -300,9 +405,11 @@ export const ChatPanel = ({
             </Message>
           )}
 
+          {/* no red to lean on, so an error is marked by a heavy rule and a label */}
           {error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
-              <p className="font-medium text-destructive">
+            <div className="rounded-md border border-l-[3px] border-l-foreground bg-muted/50 p-3 text-sm">
+              <p className="font-medium text-foreground">
+                <span className="mr-2 font-mono text-muted-foreground text-xs uppercase">error</span>
                 {error.message || "Something went wrong."}
               </p>
               <p className="mt-1 text-muted-foreground text-xs">
@@ -315,29 +422,13 @@ export const ChatPanel = ({
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-3 px-4 pb-4">
-        {messages.length === 0 && (
-          <Suggestions>
-            {STARTERS.map((starter) => (
-              <Suggestion key={starter} onClick={suggest} suggestion={starter} />
-            ))}
-          </Suggestions>
-        )}
-
-        <PromptInput onSubmit={submit}>
-          <PromptInputBody>
-            <PromptInputTextarea placeholder="Ask about anything Jev read today…" />
-          </PromptInputBody>
-          <PromptInputFooter>
-            <PromptInputTools>
-              <span className="px-1 text-muted-foreground text-xs">
-                Enter to send · Shift+Enter for a new line
-              </span>
-            </PromptInputTools>
-            <PromptInputSubmit onStop={onStop} status={status} />
-          </PromptInputFooter>
-        </PromptInput>
-      </div>
+      <Composer
+        onStop={onStop}
+        onSubmit={submit}
+        onSuggest={suggest}
+        showStarters={messages.length === 0}
+        status={status}
+      />
     </div>
   );
 };

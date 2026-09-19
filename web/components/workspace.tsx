@@ -10,9 +10,11 @@ import { Dashboard } from "@/components/dashboard";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { isToolPart, type Item, itemsFrom, type ToolPart, toolNameOf } from "@/lib/firehose";
+import { useBelowLg } from "@/lib/use-firehose";
 
 export const Workspace = () => {
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  const narrow = useBelowLg();
 
   const { messages, sendMessage, status, stop, error, regenerate } = useChat({
     id: "web",
@@ -33,7 +35,7 @@ export const Workspace = () => {
     [messages],
   );
 
-  const items = useMemo(() => {
+  const cited = useMemo(() => {
     const seen = new Map<string, Item>();
     for (const part of activity) {
       for (const item of itemsFrom(toolNameOf(part) ?? "", part.output)) {
@@ -68,19 +70,21 @@ export const Workspace = () => {
         <ChatPanel
           error={error}
           messages={messages}
+          onOpenDashboard={toggleDashboard}
           onRetry={retry}
           onSend={send}
           onStop={stop}
+          showPile={narrow}
           status={status}
         />
 
         <aside className="hidden w-96 shrink-0 border-l lg:block">
-          <Dashboard activity={activity} items={items} />
+          <Dashboard activity={activity} cited={cited} />
         </aside>
 
         {dashboardOpen && (
           <div className="fixed inset-0 z-50 bg-background lg:hidden">
-            <Dashboard activity={activity} items={items} onClose={closeDashboard} />
+            <Dashboard activity={activity} cited={cited} onClose={closeDashboard} />
           </div>
         )}
       </div>

@@ -24,6 +24,12 @@ news feeds  ───┼─► Jev (typed, calibrated) ─► keep / review / dr
 | the agent | LangGraph + `langchain-typesafe` | Chat, tools and memory genuinely are a state machine. Conversation persistence, LangSmith tracing and interrupts come for free. |
 | the chat UI | Next.js + Vercel AI SDK + AI Elements | The SDK does the streaming; **AI Elements does the interface** — conversation, message, reasoning, tool and prompt-input components, vendored as source so they stay editable. Only a scored-corpus row is built here, because the kit has none. |
 
+Every colour token is `oklch(L 0 0)` — lightness, chroma pinned to zero. Meaning
+is carried by weight, fill, border and icon shape, so nothing here needs to be
+seen in colour to be read. `web/app/globals.css` says the same thing at the top;
+shadcn's chart and sidebar tokens are deleted rather than neutralised, because
+an unused chromatic token is exactly how a blue slips back in.
+
 Jev is reached through the official `langchain-typesafe` package. One subclass in
 `firehose/jev.py` swaps the route to `/v1/decisions` because your key is from
 AI/ML API; everything else is the package unchanged.
@@ -199,12 +205,34 @@ into `web/components/ai-elements/` as ordinary source you can edit.
 - **Thinking** — `Reasoning` renders whatever the model exposes as thinking;
   `ChainOfThought` turns the turn's tool calls into a step trace.
 - **Tools** — every call is a `Tool` card with its real parameters and result.
-- **Dashboard** — an `Artifact` panel: corpus verdicts, streams, a `Task` feed of
-  the session's calls, and the items the agent surfaced.
+- **Dashboard** — an `Artifact` panel: corpus verdicts, streams, the scored pile
+  itself behind keep/review/drop tabs, and a `Task` feed of the session's calls.
 
-One thing AI Elements has no component for is a scored-corpus row, so
-`item-row.tsx` and the verdict meter are built on the same primitives. Nothing
-else is hand-rolled.
+It opens on the pile, not on an empty chat: `/api/items` serves what was scored
+before anyone asks a question, and rows the agent then touches are marked
+`cited` and take on whatever it measured — an `ask_jev` probability displaces
+the stored relevance. Below `lg`, where the rail is behind a toggle, the opening
+screen carries the kept pile itself.
+
+AI Elements has no component for a scored-corpus row, so `item-row.tsx` and the
+verdict meter are built on the same primitives.
+
+### Where it departs from the kit
+
+Three deliberate edits, all in `web/components/ai-elements/`:
+
+- **No syntax highlighter.** `code-block.tsx` is deleted and `tool.tsx` renders
+  JSON as plain monospace. Shiki's job is hue, and this interface has none — its
+  github themes paint JSON numbers `#005cc5`. It was also the single heaviest
+  thing on the page.
+- **No `motion`.** `shimmer.tsx` keeps its API and its look, but the sweep is a
+  CSS keyframe rather than a 39 kB animation runtime — and it now stands down
+  under `prefers-reduced-motion`.
+- **Fewer Streamdown plugins.** `mermaid` and `math` are dropped; the agent
+  answers in prose about tenders.
+
+Together those take the first load from **722 kB to 359 kB**. Add any of them
+back in one file if the corpus ever needs them.
 
 To pull in more of the kit: `npx ai-elements@latest add <component>`.
 
@@ -270,9 +298,12 @@ firehose/
   server.py     FastAPI bridge for the web UI
   __main__.py   run / chat / ask
 web/
-  app/api/chat  translates the bridge's events into the AI SDK stream
+  app/api/chat   translates the bridge's events into the AI SDK stream
+  app/api/items  the scored pile, so the UI opens on something
+  app/api/stats  corpus counts
+  lib/bridge.ts  server-only: the bridge address and token, in one place
   components/ai-elements/  Vercel AI Elements, vendored as source
-  components/   workspace (shell), chat-panel, dashboard, item-row
+  components/    workspace (shell), chat-panel, dashboard, item-row
   components/ui/           the shadcn/ui primitives AI Elements builds on
 deploy/         cron, systemd service + timer
 ```

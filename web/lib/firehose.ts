@@ -29,6 +29,8 @@ export type Item = {
   level?: string;
   score?: number;
   normalised?: number;
+  /** set locally when the agent touched this row during the session */
+  cited?: boolean;
 };
 
 export type Stats = {
@@ -146,3 +148,12 @@ export const scoreOf = (item: Item): { label: string; value: number } | null => 
 
 export const VERDICTS = ["keep", "review", "drop"] as const;
 export type Verdict = (typeof VERDICTS)[number];
+
+export type PileTab = Verdict | "any";
+
+export const PILE_TABS: { value: PileTab; label: string }[] = [
+  { label: "Keep", value: "keep" },
+  { label: "Review", value: "review" },
+  { label: "Drop", value: "drop" },
+  { label: "All", value: "any" },
+];
