@@ -15,15 +15,21 @@ export type Item = {
   signals?: string;
 };
 
-function Bar({ label, value, color }: { label: string; value: number; color: string }) {
+function Bar({ label, value, hatched }: { label: string; value: number; hatched?: boolean }) {
   const pct = Math.max(0, Math.min(1, value)) * 100;
   return (
     <span className="bar">
       {label}
       <span className="track">
-        <span className="fill" style={{ width: `${pct}%`, background: color }} />
+        <span
+          className="fill"
+          style={{
+            width: `${pct}%`,
+            background: hatched ? "var(--hatch)" : "var(--ink)",
+          }}
+        />
       </span>
-      <b style={{ fontWeight: 600 }}>{value.toFixed(2)}</b>
+      <b style={{ fontWeight: 650 }}>{value.toFixed(2)}</b>
     </span>
   );
 }
@@ -57,9 +63,9 @@ export default function ItemCard({ item }: { item: Item }) {
       {(relevance !== undefined || certainty !== undefined || item.level || item.choice) && (
         <div className="bars">
           {relevance !== undefined && (
-            <Bar label={item.probability !== undefined ? "probability" : "relevance"} value={relevance} color="var(--series-1)" />
+            <Bar label={item.probability !== undefined ? "probability" : "relevance"} value={relevance} />
           )}
-          {certainty !== undefined && <Bar label="confidence" value={certainty} color="var(--series-2)" />}
+          {certainty !== undefined && <Bar label="confidence" value={certainty} hatched />}
           {item.level && <span className="bar">level: <b style={{ fontWeight: 600 }}>{item.level}</b></span>}
           {item.choice && <span className="bar">choice: <b style={{ fontWeight: 600 }}>{item.choice}</b></span>}
         </div>

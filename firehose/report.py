@@ -12,32 +12,30 @@ from .pipeline import DROP, KEEP, REVIEW, Result
 CSS = """
 :root{
   color-scheme:light;
-  --surface-0:#f6f6f4; --surface-1:#fcfcfb; --border:#e3e2dd;
-  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#82817c;
-  --series-1:#2a78d6; --series-2:#eb6834;
-  --good:#0ca30c; --warning:#fab219; --neutral:#a8a79f;
-  --track:#eceae5;
+  --surface-0:#ffffff; --surface-1:#ffffff; --border:#d8d8d8;
+  --text-primary:#0a0a0a; --text-secondary:#3d3d3d; --text-muted:#767676;
+  --ink:#0a0a0a; --ink-invert:#ffffff; --track:#e6e6e6;
+  --hatch: repeating-linear-gradient(45deg,#0a0a0a 0 2px,transparent 2px 4px);
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --surface-0:#111110; --surface-1:#1a1a19; --border:#33332f;
-    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e85;
-    --series-1:#3987e5; --series-2:#d95926;
-    --good:#0ca30c; --warning:#fab219; --neutral:#6d6c66;
-    --track:#2a2a27;
+    --surface-0:#000000; --surface-1:#000000; --border:#2e2e2e;
+    --text-primary:#f5f5f5; --text-secondary:#c4c4c4; --text-muted:#8a8a8a;
+    --ink:#f5f5f5; --ink-invert:#000000; --track:#242424;
+    --hatch: repeating-linear-gradient(45deg,#f5f5f5 0 2px,transparent 2px 4px);
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --surface-0:#111110; --surface-1:#1a1a19; --border:#33332f;
-  --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#8f8e85;
-  --series-1:#3987e5; --series-2:#d95926;
-  --good:#0ca30c; --warning:#fab219; --neutral:#6d6c66;
-  --track:#2a2a27;
+  --surface-0:#000000; --surface-1:#000000; --border:#2e2e2e;
+  --text-primary:#f5f5f5; --text-secondary:#c4c4c4; --text-muted:#8a8a8a;
+  --ink:#f5f5f5; --ink-invert:#000000; --track:#242424;
+  --hatch: repeating-linear-gradient(45deg,#f5f5f5 0 2px,transparent 2px 4px);
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--surface-0);color:var(--text-primary);
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   font:15px/1.55 ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
 .wrap{max-width:1000px;margin:0 auto;padding:32px 16px 64px}
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;justify-content:space-between;margin-bottom:6px}
@@ -46,17 +44,17 @@ h2{font-size:15px;margin:32px 0 10px;color:var(--text-secondary);font-weight:600
   text-transform:uppercase;letter-spacing:.06em}
 .sub{color:var(--text-muted);font-size:13px;margin:0 0 24px}
 button{font:inherit;font-size:13px;color:var(--text-secondary);background:var(--surface-1);
-  border:1px solid var(--border);border-radius:8px;padding:5px 11px;cursor:pointer}
+  border:1px solid var(--border);border-radius:2px;padding:5px 11px;cursor:pointer}
 button:hover{color:var(--text-primary)}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
-.kpi{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+.kpi{background:var(--surface-1);border:1px solid var(--border);border-radius:2px;padding:14px 16px}
 .kpi .n{font-size:26px;font-weight:650;letter-spacing:-.02em;line-height:1.15}
 .kpi .l{font-size:12px;color:var(--text-muted);margin-top:3px}
 .dist{display:flex;gap:2px;margin:20px 0 4px;height:12px}
-.dist span{border-radius:3px}
+.dist span{border-radius:0}
 .distlab{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--text-secondary)}
-.distlab i{width:9px;height:9px;border-radius:3px;display:inline-block;margin-right:6px}
-.item{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;
+.distlab i{width:9px;height:9px;border-radius:0;display:inline-block;margin-right:6px}
+.item{background:var(--surface-1);border:1px solid var(--border);border-radius:2px;
   padding:14px 16px;margin-bottom:8px}
 .item a{color:var(--text-primary);text-decoration:none;font-weight:600}
 .item a:hover{text-decoration:underline;text-underline-offset:2px}
@@ -65,18 +63,20 @@ button:hover{color:var(--text-primary)}
 .bars{display:flex;gap:18px;margin-top:9px;flex-wrap:wrap}
 .bar{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-secondary);
   font-variant-numeric:tabular-nums}
-.track{width:74px;height:5px;background:var(--track);border-radius:3px;overflow:hidden}
-.fill{height:100%;border-radius:3px;display:block}
+.track{width:74px;height:5px;background:var(--track);border-radius:0;overflow:hidden}
+.fill{height:100%;border-radius:0;display:block}
 .tag{font-size:11px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;
-  padding:2px 7px;border-radius:999px;border:1px solid var(--border);white-space:nowrap}
-.tag.keep{color:var(--good)} .tag.review{color:var(--warning)} .tag.drop{color:var(--text-muted)}
+  padding:2px 7px;border-radius:2px;border:1px solid var(--border);white-space:nowrap;font-family:var(--mono)}
+.tag.keep{background:var(--ink);color:var(--ink-invert);border-color:var(--ink)}
+.tag.review{background:transparent;color:var(--text-primary);border-color:var(--text-primary)}
+.tag.drop{background:transparent;color:var(--text-muted);border-style:dashed}
 .row{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
 details{margin-top:10px} summary{cursor:pointer;color:var(--text-secondary);font-size:13px}
 table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
 th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:top}
 th{color:var(--text-muted);font-weight:600;font-size:12px}
-.warn{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--warning);
-  border-radius:8px;padding:10px 14px;font-size:13px;color:var(--text-secondary);margin-bottom:8px}
+.warn{background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--ink);
+  border-radius:2px;padding:10px 14px;font-size:13px;color:var(--text-secondary);margin-bottom:8px}
 footer{margin-top:40px;font-size:12px;color:var(--text-muted);border-top:1px solid var(--border);padding-top:14px}
 """
 
@@ -124,7 +124,7 @@ def _item_card(r: Result) -> str:
   <div class="row"><div>{link}</div><span class="tag {r.verdict}">{r.verdict}</span></div>
   <div class="meta">{_esc(r.item.source)}{' · ' + _esc(r.item.published) if r.item.published else ''}</div>
   {f'<div class="sig">{_esc(r.reason)}</div>' if r.reason else ''}
-  <div class="bars">{_bar('relevance', r.relevance, '--series-1')}{_bar('confidence', r.certainty, '--series-2')}</div>
+  <div class="bars">{_bar('relevance', r.relevance, '--ink')}{_bar('confidence', r.certainty, '--hatch')}</div>
 </article>"""
 
 
@@ -228,9 +228,9 @@ def render(
   <div class="kpis">{kpi_html}</div>
   <div class="dist">{seg}</div>
   <div class="distlab">
-    <span><i style="background:var(--good)"></i>kept {len(keep)} ({len(keep)/total:.0%})</span>
-    <span><i style="background:var(--warning)"></i>review {len(review)} ({len(review)/total:.0%})</span>
-    <span><i style="background:var(--neutral)"></i>dropped {len(drop)} ({len(drop)/total:.0%})</span>
+    <span><i style="background:var(--ink)"></i>kept {len(keep)} ({len(keep)/total:.0%})</span>
+    <span><i style="background:var(--hatch)"></i>review {len(review)} ({len(review)/total:.0%})</span>
+    <span><i style="background:transparent"></i>dropped {len(drop)} ({len(drop)/total:.0%})</span>
   </div>
   {warn_html}
   <div id="cards">{body}</div>

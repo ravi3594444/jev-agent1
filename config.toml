@@ -9,7 +9,10 @@
 [run]
 backend            = "aimlapi"   # "aimlapi" (your AI/ML key) or "typesafe" (native key)
 workers            = 8           # parallel Jev calls
-max_items_per_source = 40
+# Raised from 40: at ~$0.00005 an item, 2,000 items is about 10 cents, and
+# dedupe means each run only pays for what it has not seen before. Coverage is
+# the constraint worth spending on, not frequency.
+max_items_per_source = 100
 timeout            = 60      # seconds per Jev call; 30 proved too tight on a cold link
 output_dir         = "out"
 state_dir          = "state"
@@ -181,6 +184,18 @@ sources = [
   { type = "hn", tags = "comment", max_age_days = 45, query = "seeking freelancer", name = "HN seeking-freelancer thread" },
 
   { type = "hn", tags = "comment", max_age_days = 45, query = "n8n OR zapier OR make.com OR automation build integration", name = "HN automation asks" },
+
+  # --- Apify: needs APIFY_TOKEN in .env, and costs per run --------------------
+  # Businesses mostly are not on Reddit, so these reach where they are.
+  # Confirm each actor id in your Apify console before enabling - slugs change.
+  #
+  # X/Twitter: people really do post "looking for a developer" here.
+  # { type = "apify", actor = "apify~tweet-scraper", name = "X: hiring posts", max_age_days = 7, input = { searchTerms = ["need a web developer", "looking for an AI developer", "need someone to automate", "hiring a freelance developer"], maxItems = 60 } },
+  #
+  # Google Maps: the strongest outbound list there is - real local businesses
+  # with no website, or a website that has not been touched in a decade. They
+  # are not asking for anyone, which is exactly the unstated_need case.
+  # { type = "apify", actor = "compass~crawler-google-places", name = "Maps: businesses with no site", max_age_days = 0, input = { searchStringsArray = ["restaurants in Mumbai", "dental clinics in Pune", "marketing agencies in Bangalore"], maxCrawledPlacesPerSearch = 80, skipClosedPlaces = true } },
 ]
 
 # Nothing older than this is worth reading - a month-old "need a developer"
@@ -193,3 +208,5 @@ max_age_days = 21
 # dropped outright however well they score.
 [gates.drop_choices]
 posting_kind = ["offering"]
+# no way to reach them means it cannot become work, however good it looks
+contact_via  = ["none"]

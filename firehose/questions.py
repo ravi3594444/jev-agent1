@@ -132,6 +132,16 @@ DEFAULT_BUDGET_LEVELS = [
 ]
 
 
+DEFAULT_CONTACT_CHANNELS = {
+    "direct_message": "Reply or DM them on the platform the post is on - Reddit, X, a forum",
+    "email": "An email address is given, or the post says to email",
+    "apply_link": "A form, job-board application link, or 'apply here'",
+    "phone_or_whatsapp": "A phone number or WhatsApp contact",
+    "their_website": "A business website with a contact form or enquiry page",
+    "none": "No usable route at all - closed, filled, or no contact of any kind",
+}
+
+
 def clients(cfg: dict) -> dict:
     """Question set for freelance and contract work leads.
 
@@ -169,11 +179,10 @@ def clients(cfg: dict) -> dict:
             false_desc="A developer, jobseeker, student, hobbyist, or a large tech company's "
                        "recruiting post",
         ),
-        "contactable": noul(
-            "There is a clear way to respond - a contact detail, an application "
-            "link, or an invitation to message.",
-            true_desc="Gives an email, form, link, or explicitly asks people to get in touch",
-            false_desc="No route to reply, or the posting is already closed or filled",
+        "contact_via": choice(
+            "How would we actually reach this person? Pick the route they have "
+            "made available, not the one we would prefer.",
+            cfg.get("contact_channels", DEFAULT_CONTACT_CHANNELS),
         ),
     }
 

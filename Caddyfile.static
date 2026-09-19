@@ -1,0 +1,23 @@
+# Minimal: serve the daily digest at v-agent.duckdns.org and nothing else.
+#
+# No Node, no bridge, no build step - the digest is one self-contained HTML
+# file, so Caddy just hands it over. Caddy fetches a Let's Encrypt certificate
+# on the first request; there is nothing to renew.
+#
+# When you later want the chat UI, swap this file for the full Caddyfile in
+# the repo root, which reverse-proxies to Next on :3000.
+
+v-agent.duckdns.org {
+	encode gzip
+	root * /opt/firehose/out
+
+	# "/" serves the digest; out/ also holds results.jsonl, which stays
+	# reachable at /results.jsonl if you want the raw scored data.
+	try_files {path} /digest.html
+	file_server
+
+	# Uncomment to put a password on it (run `caddy hash-password` first):
+	# basic_auth {
+	# 	dev $2a$14$PASTE_THE_HASH_HERE
+	# }
+}

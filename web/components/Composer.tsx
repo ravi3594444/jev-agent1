@@ -48,7 +48,11 @@ export default function Composer({
           aria-label="Message"
         />
         {busy ? (
-          <button className="send" onClick={onStop} style={{ background: "var(--neutral)" }}>
+          <button
+            className="send"
+            onClick={onStop}
+            style={{ background: "transparent", color: "var(--text-primary)" }}
+          >
             Stop
           </button>
         ) : (

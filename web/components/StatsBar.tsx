@@ -30,9 +30,9 @@ export default function StatsBar() {
 
   return (
     <div className="pills">
-      <span className="pill"><i style={{ background: "var(--good)" }} />keep <b>{v.keep ?? 0}</b></span>
-      <span className="pill"><i style={{ background: "var(--warning)" }} />review <b>{v.review ?? 0}</b></span>
-      <span className="pill"><i style={{ background: "var(--neutral)" }} />dropped <b>{v.drop ?? 0}</b></span>
+      <span className="pill"><i style={{ background: "var(--ink)" }} />keep <b>{v.keep ?? 0}</b></span>
+      <span className="pill"><i style={{ background: "var(--hatch)" }} />review <b>{v.review ?? 0}</b></span>
+      <span className="pill"><i style={{ background: "transparent", borderStyle: "dashed" }} />dropped <b>{v.drop ?? 0}</b></span>
       <span className="pill">scored <b>{stats.total}</b></span>
     </div>
   );
