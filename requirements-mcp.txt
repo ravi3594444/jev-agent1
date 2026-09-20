@@ -1,0 +1,10 @@
+# Only needed for `python3 -m firehose mcp`, which serves the corpus and the
+# agent to other agents.
+#
+# search_items, get_item and corpus_stats need nothing but this and a scored
+# results.jsonl. ask_jev and ask_agent reach the model, so they also want
+# requirements.txt installed.
+#
+# Pinned to v2: the SDK renamed FastMCP to MCPServer in 2.0 and this code uses
+# the new name.
+mcp>=2,<3

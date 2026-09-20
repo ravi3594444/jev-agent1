@@ -10,9 +10,9 @@ import tomllib
 from typing import Any
 
 from .corpus import Corpus
-from .jev import RunStats
-from .pipeline import SeenStore, run_stream
-from .report import render
+
+# .jev and .pipeline pull in langchain; importing them here would make every
+# subcommand need the agent half installed. `mcp` and `ask` do not.
 
 
 def load_config(path: str) -> dict:
@@ -21,6 +21,10 @@ def load_config(path: str) -> dict:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    from .jev import RunStats
+    from .pipeline import SeenStore, run_stream
+    from .report import render
+
     cfg = load_config(args.config)
     run_cfg = cfg.get("run", {})
     gates = cfg.get("gates", {})
@@ -179,6 +183,23 @@ def cmd_ask(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Serve the corpus and the agent to other agents over MCP."""
+    os.environ.setdefault("FIREHOSE_CONFIG", args.config)
+    if args.mock:
+        os.environ["FIREHOSE_MOCK"] = "1"
+    try:
+        from .mcp_server import main as serve
+    except ImportError as exc:  # the SDK is an extra, not a hard requirement
+        print(f"! MCP server needs the SDK: pip install 'mcp>=2'  ({exc})", file=sys.stderr)
+        return 2
+
+    where = f"http://{args.host}:{args.port}/mcp" if args.http else "stdio"
+    print(f"· firehose MCP server on {where}", file=sys.stderr)
+    serve(http=args.http, host=args.host, port=args.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser("firehose", description="Read the whole river, look at what matters.")
     p.add_argument("--config", default="config.toml")
@@ -201,6 +222,12 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("question")
     a.add_argument("--thread", default="default")
     a.set_defaults(func=cmd_ask)
+
+    m = sub.add_parser("mcp", help="serve the corpus and agent to other agents over MCP")
+    m.add_argument("--http", action="store_true", help="streamable HTTP instead of stdio")
+    m.add_argument("--host", default="127.0.0.1", help="only with --http")
+    m.add_argument("--port", type=int, default=8765, help="only with --http")
+    m.set_defaults(func=cmd_mcp)
 
     args = p.parse_args(argv)
     try:

@@ -3,6 +3,7 @@
 Deliberately dumb wire format. This emits newline-delimited JSON events:
 
     {"type":"text",       "delta": "..."}
+    {"type":"reasoning",  "delta": "..."}
     {"type":"tool-start", "id": "...", "name": "ask_jev", "args": {...}}
     {"type":"tool-end",   "id": "...", "result": {...}}
     {"type":"error",      "message": "..."}
@@ -19,7 +20,6 @@ from __future__ import annotations
 import hmac
 import json
 import os
-import tomllib
 from typing import Any, Iterator
 
 from langchain_core.messages import AIMessage, AIMessageChunk
@@ -29,10 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .corpus import Corpus
-
-CONFIG_PATH = os.environ.get("FIREHOSE_CONFIG", "config.toml")
-MOCK = os.environ.get("FIREHOSE_MOCK", "").lower() in {"1", "true", "yes"}
+from .runtime import MOCK, agent, config as _config, corpus, mtime
 
 # Shared secret between the Next server and this bridge. Optional for localhost
 # development; REQUIRED once anything about this is reachable from the internet,
@@ -48,9 +45,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_state: dict[str, Any] = {"agent": None, "saver": None, "corpus": None, "mtime": 0.0}
-
-
 def require_token(authorization: str | None) -> None:
     """No-op when FIREHOSE_TOKEN is unset (local dev); enforced when it is set."""
     if not TOKEN:
@@ -60,47 +54,6 @@ def require_token(authorization: str | None) -> None:
     # constant-time compare so the token cannot be guessed a byte at a time
     if not hmac.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="bad or missing bridge token")
-
-
-def _config() -> dict:
-    with open(CONFIG_PATH, "rb") as fh:
-        return tomllib.load(fh)
-
-
-def _results_path() -> str:
-    cfg = _config()
-    return os.path.join(cfg.get("run", {}).get("output_dir", "out"), "results.jsonl")
-
-
-def corpus() -> Corpus:
-    """Reload when the scorer has written a newer file - runs are out of band."""
-    path = _results_path()
-    mtime = os.path.getmtime(path) if os.path.exists(path) else 0.0
-    if _state["corpus"] is None or mtime != _state["mtime"]:
-        _state["corpus"] = Corpus.from_jsonl(path)
-        _state["mtime"] = mtime
-        _state["agent"] = None          # rebuild so tools close over fresh data
-    return _state["corpus"]
-
-
-def agent() -> Any:
-    c = corpus()
-    if _state["agent"] is None:
-        from .agent import build_agent
-
-        cfg = _config()
-        acfg = cfg.get("agent", {})
-        a, saver = build_agent(
-            c,
-            backend=cfg.get("run", {}).get("backend", "aimlapi"),
-            mock=MOCK,
-            checkpoint_path=acfg.get("checkpoint_path", "state/agent.sqlite"),
-            model=acfg.get("model"),
-            base_url=acfg.get("base_url"),
-            temperature=float(acfg.get("temperature", 0.3)),
-        )
-        _state["agent"], _state["saver"] = a, saver
-    return _state["agent"]
 
 
 # --------------------------------------------------------------------------
@@ -122,6 +75,30 @@ def _text_of(content: Any) -> str:
                 out.append(block.get("text", ""))
         return "".join(out)
     return ""
+
+
+def _reasoning_of(chunk: Any) -> str:
+    """Thinking tokens, where the provider separates them from the answer.
+
+    Anthropic and friends put them in content blocks; several OpenAI-compatible
+    providers hang them off additional_kwargs instead. Neither is guaranteed to
+    be present - a model that does not expose its reasoning just yields "".
+    """
+    out = []
+    content = getattr(chunk, "content", "")
+    if isinstance(content, list):
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            kind = block.get("type")
+            if kind in {"reasoning", "thinking"}:
+                out.append(str(block.get(kind) or block.get("text") or ""))
+    extra = getattr(chunk, "additional_kwargs", None) or {}
+    for key in ("reasoning_content", "reasoning"):
+        value = extra.get(key)
+        if isinstance(value, str):
+            out.append(value)
+    return "".join(out)
 
 
 def _events(message: str, thread: str) -> Iterator[str]:
@@ -149,6 +126,9 @@ def _events(message: str, thread: str) -> Iterator[str]:
                 # tokens belong in the assistant text stream
                 if not isinstance(chunk, (AIMessageChunk, AIMessage)):
                     continue
+                thought = _reasoning_of(chunk)
+                if thought:
+                    yield emit({"type": "reasoning", "delta": thought})
                 text = _text_of(getattr(chunk, "content", ""))
                 if text:
                     yield emit({"type": "text", "delta": text})
@@ -196,7 +176,7 @@ def stats(authorization: str | None = Header(default=None)) -> dict:
         "streams": {sid: s.get("name", sid) for sid, s in (cfg.get("streams") or {}).items()},
         "gates": cfg.get("gates", {}),
         "mock": MOCK,
-        "updated": _state["mtime"],
+        "updated": mtime(),
     }
 
 

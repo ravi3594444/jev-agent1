@@ -22,7 +22,13 @@ news feeds  ───┼─► Jev (typed, calibrated) ─► keep / review / dr
 |---|---|---|
 | ingest + scoring | plain Python, stdlib only | A parallel map over items — no branches, no cycles, no carried state. A graph framework would add per-item overhead to an operation whose whole selling point is 100ms. Runs as a cron job anywhere. |
 | the agent | LangGraph + `langchain-typesafe` | Chat, tools and memory genuinely are a state machine. Conversation persistence, LangSmith tracing and interrupts come for free. |
-| the chat UI | Next.js + Vercel AI SDK | The SDK does streaming plumbing only. **Every component is hand-written** — no component library, no AI Elements. |
+| the chat UI | Next.js + Vercel AI SDK + AI Elements | The SDK does the streaming; **AI Elements does the interface** — conversation, message, reasoning, tool and prompt-input components, vendored as source so they stay editable. Only a scored-corpus row is built here, because the kit has none. |
+
+Every colour token is `oklch(L 0 0)` — lightness, chroma pinned to zero. Meaning
+is carried by weight, fill, border and icon shape, so nothing here needs to be
+seen in colour to be read. `web/app/globals.css` says the same thing at the top;
+shadcn's chart and sidebar tokens are deleted rather than neutralised, because
+an unused chromatic token is exactly how a blue slips back in.
 
 Jev is reached through the official `langchain-typesafe` package. One subclass in
 `firehose/jev.py` swaps the route to `/v1/decisions` because your key is from
@@ -188,6 +194,113 @@ every tool call and token.
 
 ---
 
+## The web UI
+
+The browser half is [Vercel AI Elements](https://ai-sdk.dev/elements) on
+shadcn/ui and Tailwind v4 — the same components Vercel ships for AI apps, copied
+into `web/components/ai-elements/` as ordinary source you can edit.
+
+- **Chat** — `Conversation`, `Message`, `MessageResponse` (Streamdown does the
+  markdown), `PromptInput`, `Suggestion`.
+- **Thinking** — `Reasoning` renders whatever the model exposes as thinking;
+  `ChainOfThought` turns the turn's tool calls into a step trace.
+- **Tools** — every call is a `Tool` card with its real parameters and result.
+- **Dashboard** — an `Artifact` panel: corpus verdicts, streams, the scored pile
+  itself behind keep/review/drop tabs, and a `Task` feed of the session's calls.
+
+It opens on the pile, not on an empty chat: `/api/items` serves what was scored
+before anyone asks a question, and rows the agent then touches are marked
+`cited` and take on whatever it measured — an `ask_jev` probability displaces
+the stored relevance. Below `lg`, where the rail is behind a toggle, the opening
+screen carries the kept pile itself.
+
+AI Elements has no component for a scored-corpus row, so `item-row.tsx` and the
+verdict meter are built on the same primitives.
+
+### Where it departs from the kit
+
+Three deliberate edits, all in `web/components/ai-elements/`:
+
+- **No syntax highlighter.** `code-block.tsx` is deleted and `tool.tsx` renders
+  JSON as plain monospace. Shiki's job is hue, and this interface has none — its
+  github themes paint JSON numbers `#005cc5`. It was also the single heaviest
+  thing on the page.
+- **No `motion`.** `shimmer.tsx` keeps its API and its look, but the sweep is a
+  CSS keyframe rather than a 39 kB animation runtime — and it now stands down
+  under `prefers-reduced-motion`.
+- **Fewer Streamdown plugins.** `mermaid` and `math` are dropped; the agent
+  answers in prose about tenders.
+
+Together those take the first load from **722 kB to 359 kB**. Add any of them
+back in one file if the corpus ever needs them.
+
+To pull in more of the kit: `npx ai-elements@latest add <component>`.
+
+---
+
+## Serving it to other agents (MCP)
+
+The web UI talks *to* the agent. `python3 -m firehose mcp` is the other
+direction: it hands the corpus and Jev to any MCP client — Claude Desktop,
+Claude Code, Cursor, or an agent you wrote.
+
+```bash
+pip install -r requirements-mcp.txt
+
+python3 -m firehose mcp                       # stdio, for a local client
+python3 -m firehose mcp --http --port 8765    # streamable HTTP, for a remote one
+```
+
+Point Claude Code at it:
+
+```bash
+claude mcp add firehose -- python3 -m firehose mcp
+```
+
+or, for a client that reads JSON:
+
+```json
+{
+  "mcpServers": {
+    "firehose": {
+      "command": "python3",
+      "args": ["-m", "firehose", "mcp"],
+      "env": { "FIREHOSE_CONFIG": "/opt/firehose/config.toml" }
+    }
+  }
+}
+```
+
+Five tools and three resources:
+
+| | what it does |
+|---|---|
+| `search_items` | search what was scored — query, verdict, stream |
+| `get_item` | one item in full, with every typed answer |
+| `corpus_stats` | counts by verdict and by stream |
+| `ask_jev` | **a brand new typed question across the whole corpus**, in one batch |
+| `ask_agent` | put an open question to the agent; threads persist |
+| `firehose://corpus/stats`, `firehose://corpus/keep`, `firehose://item/{id}` | the same data as readable resources |
+
+The tools are not reimplemented for MCP. `runtime.tools()` builds the very
+objects the LangGraph agent is handed, and the MCP server invokes those, so a
+client and the web agent cannot disagree about what `ask_jev` does.
+
+The first three need nothing but `mcp` and a scored `results.jsonl` — no
+langchain, no API key — so a laptop client can read the corpus without the
+agent half installed. `ask_jev` and `ask_agent` import langchain lazily and say
+so plainly if it is missing.
+
+No Composio or other broker is involved. That kind of platform is for giving
+*your* agent access to someone else's apps; this is the reverse — publishing
+your agent as a tool — which the official SDK does directly, with no account
+and no third party in the path.
+
+`--http` binds to loopback. These tools spend real money, so put the existing
+Caddy config and an auth check in front before exposing it.
+
+---
+
 ## Scheduling
 
 `deploy/` has a cron line, a systemd service + timer, and there's a GitHub
@@ -245,10 +358,17 @@ firehose/
   report.py     the HTML digest
   corpus.py     scored items the agent reasons over
   agent.py      LangGraph + Atria + the four tools (+ the keyless demo model)
+  runtime.py    config, corpus and agent loading, shared by both servers
   server.py     FastAPI bridge for the web UI
+  mcp_server.py MCP server: the same tools, for other agents
   __main__.py   run / chat / ask
 web/
-  app/api/chat  translates the bridge's events into the AI SDK stream
-  components/   Chat, Composer, ToolCard, ItemCard, Markdown, StatsBar
+  app/api/chat   translates the bridge's events into the AI SDK stream
+  app/api/items  the scored pile, so the UI opens on something
+  app/api/stats  corpus counts
+  lib/bridge.ts  server-only: the bridge address and token, in one place
+  components/ai-elements/  Vercel AI Elements, vendored as source
+  components/    workspace (shell), chat-panel, dashboard, item-row
+  components/ui/           the shadcn/ui primitives AI Elements builds on
 deploy/         cron, systemd service + timer
 ```

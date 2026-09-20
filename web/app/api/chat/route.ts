@@ -1,17 +1,12 @@
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 
+import { BRIDGE, bridgeHeaders } from "@/lib/bridge";
+
 export const maxDuration = 300;
-
-const BRIDGE = process.env.FIREHOSE_BRIDGE ?? "http://127.0.0.1:8000";
-const TOKEN = process.env.FIREHOSE_TOKEN ?? "";
-
-/** Server-side only — the bridge token never reaches the browser. */
-function bridgeHeaders(extra: Record<string, string> = {}): Record<string, string> {
-  return TOKEN ? { ...extra, authorization: `Bearer ${TOKEN}` } : extra;
-}
 
 type BridgeEvent =
   | { type: "text"; delta: string }
+  | { type: "reasoning"; delta: string }
   | { type: "tool-start"; id: string; name: string; args: unknown }
   | { type: "tool-end"; id: string; name: string; result: unknown }
   | { type: "error"; message: string }
@@ -63,11 +58,13 @@ export async function POST(req: Request) {
         return;
       }
 
-      // one text block at a time; closed whenever a tool interrupts, reopened after
+      // one block at a time per kind; closed whenever something interrupts, reopened after
+      const blockId = () => `b${Math.random().toString(36).slice(2, 9)}`;
+
       let textId: string | null = null;
       const openText = () => {
         if (textId === null) {
-          textId = `t${Math.random().toString(36).slice(2, 9)}`;
+          textId = blockId();
           writer.write({ type: "text-start", id: textId });
         }
         return textId;
@@ -76,6 +73,33 @@ export async function POST(req: Request) {
         if (textId !== null) {
           writer.write({ type: "text-end", id: textId });
           textId = null;
+        }
+      };
+
+      // tool calls the bridge opened but never closed. If the stream dies
+      // between tool-start and tool-end, the part would sit at
+      // input-available forever and the activity feed would keep calling it
+      // running, so every exit path settles them first.
+      const openCalls = new Set<string>();
+      const failOpenCalls = (errorText: string) => {
+        for (const toolCallId of openCalls) {
+          writer.write({ type: "tool-output-error", toolCallId, errorText, dynamic: true });
+        }
+        openCalls.clear();
+      };
+
+      let reasoningId: string | null = null;
+      const openReasoning = () => {
+        if (reasoningId === null) {
+          reasoningId = blockId();
+          writer.write({ type: "reasoning-start", id: reasoningId });
+        }
+        return reasoningId;
+      };
+      const closeReasoning = () => {
+        if (reasoningId !== null) {
+          writer.write({ type: "reasoning-end", id: reasoningId });
+          reasoningId = null;
         }
       };
 
@@ -93,10 +117,17 @@ export async function POST(req: Request) {
         }
         switch (evt.type) {
           case "text":
+            closeReasoning();
             writer.write({ type: "text-delta", id: openText(), delta: evt.delta });
+            break;
+          case "reasoning":
+            closeText();
+            writer.write({ type: "reasoning-delta", id: openReasoning(), delta: evt.delta });
             break;
           case "tool-start":
             closeText();
+            closeReasoning();
+            openCalls.add(evt.id);
             writer.write({
               type: "tool-input-available",
               toolCallId: evt.id,
@@ -108,6 +139,7 @@ export async function POST(req: Request) {
             });
             break;
           case "tool-end":
+            openCalls.delete(evt.id);
             writer.write({
               type: "tool-output-available",
               toolCallId: evt.id,
@@ -117,25 +149,37 @@ export async function POST(req: Request) {
             break;
           case "error":
             closeText();
+            closeReasoning();
+            failOpenCalls(evt.message);
             writer.write({ type: "error", errorText: evt.message });
             break;
           case "done":
             closeText();
+            closeReasoning();
             break;
         }
       };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) handle(line);
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) handle(line);
+        }
+        if (buffer) handle(buffer);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        failOpenCalls(message);
+        writer.write({ type: "error", errorText: `Bridge stream failed: ${message}` });
       }
-      if (buffer) handle(buffer);
 
+      // the bridge can also just stop mid-call without an error event
+      failOpenCalls("The bridge ended the stream before this call returned.");
       closeText();
+      closeReasoning();
       writer.write({ type: "finish" });
     },
     onError: (error) => (error instanceof Error ? error.message : String(error)),
