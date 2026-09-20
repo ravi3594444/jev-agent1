@@ -22,7 +22,12 @@ export const Workspace = () => {
   });
 
   const send = useCallback((text: string) => void sendMessage({ text }), [sendMessage]);
-  const retry = useCallback(() => void regenerate(), [regenerate]);
+  // regenerate the reply that was clicked; bare regenerate() always takes the
+  // newest turn, which is the wrong one under any older message
+  const retry = useCallback(
+    (messageId: string) => void regenerate({ messageId }),
+    [regenerate],
+  );
   const closeDashboard = useCallback(() => setDashboardOpen(false), []);
   const toggleDashboard = useCallback(() => setDashboardOpen((open) => !open), []);
 

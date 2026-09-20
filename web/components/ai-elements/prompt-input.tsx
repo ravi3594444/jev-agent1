@@ -983,12 +983,17 @@ export const PromptInputTextarea = ({
         }
         e.preventDefault();
 
-        // Check if the submit button is disabled before submitting
+        // Only submit when there is an enabled submit button to activate.
+        // Upstream checks `submitButton?.disabled`, which is undefined when no
+        // submit button exists at all - and while a reply streams there is
+        // none, because the action button is a type="button" Stop. Enter then
+        // submitted a form whose handler resets it before the chat refuses the
+        // send, silently erasing the draft.
         const { form } = e.currentTarget;
         const submitButton = form?.querySelector(
           'button[type="submit"]'
         ) as HTMLButtonElement | null;
-        if (submitButton?.disabled) {
+        if (!submitButton || submitButton.disabled) {
           return;
         }
 

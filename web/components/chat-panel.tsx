@@ -157,6 +157,16 @@ const Opening = ({ className }: { className?: string }) => (
   />
 );
 
+const RetryAction = ({ id, onRetry }: { id: string; onRetry: (id: string) => void }) => {
+  const retry = useCallback(() => onRetry(id), [id, onRetry]);
+
+  return (
+    <MessageAction onClick={retry} tooltip="Ask again">
+      <RefreshCcwIcon className="size-4" />
+    </MessageAction>
+  );
+};
+
 const CopyAction = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false);
 
@@ -264,7 +274,7 @@ export type ChatPanelProps = {
   showPile: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
-  onRetry: () => void;
+  onRetry: (messageId: string) => void;
   onOpenDashboard: () => void;
 };
 
@@ -387,9 +397,7 @@ export const ChatPanel = ({
                   <MessageToolbar>
                     <MessageActions>
                       <CopyAction text={text} />
-                      <MessageAction onClick={onRetry} tooltip="Ask again">
-                        <RefreshCcwIcon className="size-4" />
-                      </MessageAction>
+                      <RetryAction id={message.id} onRetry={onRetry} />
                     </MessageActions>
                   </MessageToolbar>
                 )}

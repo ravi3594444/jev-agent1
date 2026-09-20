@@ -76,6 +76,18 @@ export async function POST(req: Request) {
         }
       };
 
+      // tool calls the bridge opened but never closed. If the stream dies
+      // between tool-start and tool-end, the part would sit at
+      // input-available forever and the activity feed would keep calling it
+      // running, so every exit path settles them first.
+      const openCalls = new Set<string>();
+      const failOpenCalls = (errorText: string) => {
+        for (const toolCallId of openCalls) {
+          writer.write({ type: "tool-output-error", toolCallId, errorText, dynamic: true });
+        }
+        openCalls.clear();
+      };
+
       let reasoningId: string | null = null;
       const openReasoning = () => {
         if (reasoningId === null) {
@@ -115,6 +127,7 @@ export async function POST(req: Request) {
           case "tool-start":
             closeText();
             closeReasoning();
+            openCalls.add(evt.id);
             writer.write({
               type: "tool-input-available",
               toolCallId: evt.id,
@@ -126,6 +139,7 @@ export async function POST(req: Request) {
             });
             break;
           case "tool-end":
+            openCalls.delete(evt.id);
             writer.write({
               type: "tool-output-available",
               toolCallId: evt.id,
@@ -136,6 +150,7 @@ export async function POST(req: Request) {
           case "error":
             closeText();
             closeReasoning();
+            failOpenCalls(evt.message);
             writer.write({ type: "error", errorText: evt.message });
             break;
           case "done":
@@ -145,16 +160,24 @@ export async function POST(req: Request) {
         }
       };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
-        for (const line of lines) handle(line);
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+          for (const line of lines) handle(line);
+        }
+        if (buffer) handle(buffer);
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        failOpenCalls(message);
+        writer.write({ type: "error", errorText: `Bridge stream failed: ${message}` });
       }
-      if (buffer) handle(buffer);
 
+      // the bridge can also just stop mid-call without an error event
+      failOpenCalls("The bridge ended the stream before this call returned.");
       closeText();
       closeReasoning();
       writer.write({ type: "finish" });
