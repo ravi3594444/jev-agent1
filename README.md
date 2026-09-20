@@ -238,6 +238,69 @@ To pull in more of the kit: `npx ai-elements@latest add <component>`.
 
 ---
 
+## Serving it to other agents (MCP)
+
+The web UI talks *to* the agent. `python3 -m firehose mcp` is the other
+direction: it hands the corpus and Jev to any MCP client — Claude Desktop,
+Claude Code, Cursor, or an agent you wrote.
+
+```bash
+pip install -r requirements-mcp.txt
+
+python3 -m firehose mcp                       # stdio, for a local client
+python3 -m firehose mcp --http --port 8765    # streamable HTTP, for a remote one
+```
+
+Point Claude Code at it:
+
+```bash
+claude mcp add firehose -- python3 -m firehose mcp
+```
+
+or, for a client that reads JSON:
+
+```json
+{
+  "mcpServers": {
+    "firehose": {
+      "command": "python3",
+      "args": ["-m", "firehose", "mcp"],
+      "env": { "FIREHOSE_CONFIG": "/opt/firehose/config.toml" }
+    }
+  }
+}
+```
+
+Five tools and three resources:
+
+| | what it does |
+|---|---|
+| `search_items` | search what was scored — query, verdict, stream |
+| `get_item` | one item in full, with every typed answer |
+| `corpus_stats` | counts by verdict and by stream |
+| `ask_jev` | **a brand new typed question across the whole corpus**, in one batch |
+| `ask_agent` | put an open question to the agent; threads persist |
+| `firehose://corpus/stats`, `firehose://corpus/keep`, `firehose://item/{id}` | the same data as readable resources |
+
+The tools are not reimplemented for MCP. `runtime.tools()` builds the very
+objects the LangGraph agent is handed, and the MCP server invokes those, so a
+client and the web agent cannot disagree about what `ask_jev` does.
+
+The first three need nothing but `mcp` and a scored `results.jsonl` — no
+langchain, no API key — so a laptop client can read the corpus without the
+agent half installed. `ask_jev` and `ask_agent` import langchain lazily and say
+so plainly if it is missing.
+
+No Composio or other broker is involved. That kind of platform is for giving
+*your* agent access to someone else's apps; this is the reverse — publishing
+your agent as a tool — which the official SDK does directly, with no account
+and no third party in the path.
+
+`--http` binds to loopback. These tools spend real money, so put the existing
+Caddy config and an auth check in front before exposing it.
+
+---
+
 ## Scheduling
 
 `deploy/` has a cron line, a systemd service + timer, and there's a GitHub
@@ -295,7 +358,9 @@ firehose/
   report.py     the HTML digest
   corpus.py     scored items the agent reasons over
   agent.py      LangGraph + Atria + the four tools (+ the keyless demo model)
+  runtime.py    config, corpus and agent loading, shared by both servers
   server.py     FastAPI bridge for the web UI
+  mcp_server.py MCP server: the same tools, for other agents
   __main__.py   run / chat / ask
 web/
   app/api/chat   translates the bridge's events into the AI SDK stream

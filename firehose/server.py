@@ -20,7 +20,6 @@ from __future__ import annotations
 import hmac
 import json
 import os
-import tomllib
 from typing import Any, Iterator
 
 from langchain_core.messages import AIMessage, AIMessageChunk
@@ -30,10 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .corpus import Corpus
-
-CONFIG_PATH = os.environ.get("FIREHOSE_CONFIG", "config.toml")
-MOCK = os.environ.get("FIREHOSE_MOCK", "").lower() in {"1", "true", "yes"}
+from .runtime import MOCK, agent, config as _config, corpus, mtime
 
 # Shared secret between the Next server and this bridge. Optional for localhost
 # development; REQUIRED once anything about this is reachable from the internet,
@@ -49,9 +45,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_state: dict[str, Any] = {"agent": None, "saver": None, "corpus": None, "mtime": 0.0}
-
-
 def require_token(authorization: str | None) -> None:
     """No-op when FIREHOSE_TOKEN is unset (local dev); enforced when it is set."""
     if not TOKEN:
@@ -61,47 +54,6 @@ def require_token(authorization: str | None) -> None:
     # constant-time compare so the token cannot be guessed a byte at a time
     if not hmac.compare_digest(supplied, expected):
         raise HTTPException(status_code=401, detail="bad or missing bridge token")
-
-
-def _config() -> dict:
-    with open(CONFIG_PATH, "rb") as fh:
-        return tomllib.load(fh)
-
-
-def _results_path() -> str:
-    cfg = _config()
-    return os.path.join(cfg.get("run", {}).get("output_dir", "out"), "results.jsonl")
-
-
-def corpus() -> Corpus:
-    """Reload when the scorer has written a newer file - runs are out of band."""
-    path = _results_path()
-    mtime = os.path.getmtime(path) if os.path.exists(path) else 0.0
-    if _state["corpus"] is None or mtime != _state["mtime"]:
-        _state["corpus"] = Corpus.from_jsonl(path)
-        _state["mtime"] = mtime
-        _state["agent"] = None          # rebuild so tools close over fresh data
-    return _state["corpus"]
-
-
-def agent() -> Any:
-    c = corpus()
-    if _state["agent"] is None:
-        from .agent import build_agent
-
-        cfg = _config()
-        acfg = cfg.get("agent", {})
-        a, saver = build_agent(
-            c,
-            backend=cfg.get("run", {}).get("backend", "aimlapi"),
-            mock=MOCK,
-            checkpoint_path=acfg.get("checkpoint_path", "state/agent.sqlite"),
-            model=acfg.get("model"),
-            base_url=acfg.get("base_url"),
-            temperature=float(acfg.get("temperature", 0.3)),
-        )
-        _state["agent"], _state["saver"] = a, saver
-    return _state["agent"]
 
 
 # --------------------------------------------------------------------------
@@ -224,7 +176,7 @@ def stats(authorization: str | None = Header(default=None)) -> dict:
         "streams": {sid: s.get("name", sid) for sid, s in (cfg.get("streams") or {}).items()},
         "gates": cfg.get("gates", {}),
         "mock": MOCK,
-        "updated": _state["mtime"],
+        "updated": mtime(),
     }
 
 
